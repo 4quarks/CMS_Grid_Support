@@ -13,6 +13,12 @@ data.services 	{
                   "hostname": "xrootd02-cmst1.pic.es",
                   "flavour": "XROOTD",
                   "endpoint": "xrootd02-cmst1.pic.es:1095"
+                },
+                {
+                  "hostname": "llrppce.in2p3.fr",
+                  "flavour": "HTCONDOR-CE",
+                  "endpoint": "llrppce.in2p3.fr:9619",
+                  "production": false
                 }
 data.site 	T1_ES_PIC
 data.tier 	1
