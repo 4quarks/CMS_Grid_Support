@@ -8,6 +8,13 @@ query = "data.DESIRED_Sites:T2_US_MIT AND data.Type:test"
 cmssst_index = {"name": "monit_prod_condor_raw_metric*", "id": "8787"}
 
 """
+data.CRAB_PostJobStatus  Running|failed|finished
+data.Type 	test|production|analysis
+
+
+data.CRAB_Workflow       201006_002410:sciaba_crab_HC-98-T2_CH_CSCS-93080-20201004141101
+
+
 ------------------------------------------------
 data.CRAB_PostJobStatus 	Running
 data.Status 	Running
