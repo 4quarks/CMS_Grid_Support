@@ -63,6 +63,8 @@ def get_str_lucene_query(index_es, min_time, max_time, query):
     return final_query
 
 
+def get_clean_results(raw_results):
+    return [element["_source"] for element in raw_results['responses'][0]['hits']['hits']]
 
 
 

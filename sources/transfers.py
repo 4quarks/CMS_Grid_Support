@@ -3,6 +3,11 @@ import json
 from query_utils import get_data_grafana, get_str_lucene_query
 
 """
+######################## monit_prod_cms_rucio_enr*  ########################
+query = "data.name:T2_US_Florida AND data.status:ok AND metadata.path:hc15min"
+rucio_index = {"name": "monit_prod_cms_rucio_enr*", "id": "9732"}
+
+
 data.dst_rse 	T2_KR_KISTI
 data.src_rse 	T2_US_Wisconsin
 
@@ -36,11 +41,20 @@ data.transfer_endpoint 	https://fts3.cern.ch:8446
 data.src_url 	srm://gfe02.grid.hep.ph.ic.ac.uk:8443/srm/managerv2?SFN=/pnfs/hep.ph.ic.ac.uk/data/cms/.../tree_54.root
 data.dst_url 	srm://stormfe1.pi.infn.it:8444/srm/managerv2?SFN=/cms/.../tree_54.root
 data.name 	/store/.../tree_54.root
+"""
+"""
+##################################### monit_prod_fts_raw_* ###########################
+
+query = "data.vo:cms AND data.dest_se:/.*se.cis.gov.pl.*/ AND data.job_state:FAILED"
+fts_index = {"name": "monit_prod_fts_raw_*", "id": "9233"}
+
+
+
+
+
 
 """
-query = "data.name:T2_US_Florida AND data.status:ok AND metadata.path:hc15min"
 
-cmssst_index = {"name": "monit_prod_cms_rucio_enr*", "id": "9732"}
 
 now_datetime = datetime.datetime.now()
 yesterday_datetime = now_datetime - datetime.timedelta(hours=1)
