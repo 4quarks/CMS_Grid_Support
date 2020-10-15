@@ -92,7 +92,7 @@ response = json.loads(get_data_grafana(cmssst_index['id'], clean_str_query).text
 print(response)
 
 
-
+# https://monit-kibana.cern.ch/kibana/goto/5fe46c5bfee70d9130675552cfd60212
 
 
 

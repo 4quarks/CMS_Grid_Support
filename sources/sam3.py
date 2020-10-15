@@ -1,7 +1,4 @@
-import datetime
-import json
-from query_utils import get_data_grafana, get_str_lucene_query, get_clean_results
-from constants import Constants as Cte
+from query_utils import *
 
 """
 data.details  OK: COMPLETED.<br>>>> ce05-htc.cr.cnaf.infn.it: ....
@@ -21,12 +18,6 @@ data.summary OK: COMPLETED.
 data.vo cms
 
 """
-
-
-class Status:
-    error = "CRITICAL"
-    ok = "OK"
-    warning = "WARNING"
 
 
 class TestsSRM:
@@ -69,6 +60,12 @@ class TestsName:
         self.xrootd = TestsXROOTD()
 
 
+class Status:
+    error = "CRITICAL"
+    ok = "OK"
+    warning = "WARNING"
+
+
 class SAMAttributes:
     attr_hostname = "data.dst_hostname:"
     attr_status = "data.status:"
@@ -76,9 +73,9 @@ class SAMAttributes:
 
 
 class SAMTest(TestsName, SAMAttributes, Status):
-    def __init__(self, hostname, specific_test=None, status=None, time='12'):
+    def __init__(self, hostname, time='12'):
         super().__init__()
-        self.cmssst_index = {"name": "monit_prod_sam3_enr_*", "id": "9677"}
+        self.index = {"name": "monit_prod_sam3_enr_*", "id": "9677"}
         self.hostname = hostname
         self.raw_time = time
 
@@ -91,30 +88,31 @@ class SAMTest(TestsName, SAMAttributes, Status):
         min_time = round(datetime.datetime.timestamp(previous_datetime)) * 1000
         return [min_time, max_time]
 
-    def get_query_tests(self, specific_test=None, status=None):
-        query_sam = self.attr_hostname + self.hostname
+    def get_query(self, specific_test=None, status=None):
+        raw_query = self.attr_hostname + self.hostname
         if specific_test:
-            query_sam += Cte.AND + self.attr_test_name + Cte.QUOTE + specific_test + Cte.QUOTE
+            raw_query += Cte.AND + self.attr_test_name + Cte.QUOTE + specific_test + Cte.QUOTE
         if status:
-            query_sam += Cte.AND + self.attr_status + status
+            raw_query += Cte.AND + self.attr_status + status
 
-        clean_str_query = get_str_lucene_query(self.cmssst_index['name'],
-                                               self.time_slot[0], self.time_slot[1], query_sam)
+        clean_str_query = get_str_lucene_query(self.index['name'],
+                                               self.time_slot[0], self.time_slot[1], raw_query)
 
         return clean_str_query
 
     def get_response(self, clean_query):
-        raw_response = json.loads(get_data_grafana(self.cmssst_index['id'], clean_query).text.encode('utf8'))
+        raw_response = json.loads(get_data_grafana(self.index['id'], clean_query).text.encode('utf8'))
         return get_clean_results(raw_response)
 
 
 if __name__ == "__main__":
     sam = SAMTest('ce05-htc.cr.cnaf.infn.it')
-    query_critical_jobsubmit = sam.get_query_tests(specific_test=sam.ce.job_submit, status=sam.ok)
+    query_critical_jobsubmit = sam.get_query(specific_test=sam.ce.job_submit, status=sam.ok)
     response = sam.get_response(query_critical_jobsubmit)
 
     print(response)
 
+# https://monit-kibana-acc.cern.ch/kibana/goto/a297815a5ad0689f8dfa5cb6b4c0a8ef
 
 
 
