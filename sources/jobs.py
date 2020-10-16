@@ -1,11 +1,4 @@
-import datetime
-import json
-from query_utils import get_data_grafana, get_str_lucene_query
-
-
-query = "data.DESIRED_Sites:T2_US_MIT AND data.Type:test"
-
-cmssst_index = {"name": "monit_prod_condor_raw_metric*", "id": "8787"}
+from query_utils import *
 
 """
 data.CRAB_PostJobStatus  Running|failed|finished
@@ -13,7 +6,6 @@ data.Type 	test|production|analysis
 
 
 data.CRAB_Workflow       201006_002410:sciaba_crab_HC-98-T2_CH_CSCS-93080-20201004141101
-
 
 ------------------------------------------------
 data.CRAB_PostJobStatus 	Running
@@ -78,21 +70,30 @@ data.ExitCode 	0
 data.ExitStatus 	0
 data.JobFailed 	0
 ------------------------------------------------
-"""
-
-now_datetime = datetime.datetime.now()
-yesterday_datetime = now_datetime - datetime.timedelta(hours=1)
-max_time = round(datetime.datetime.timestamp(now_datetime)) * 1000
-min_time = round(datetime.datetime.timestamp(yesterday_datetime)) * 1000
-
-
-clean_str_query = get_str_lucene_query(cmssst_index['name'], min_time, max_time, query)
-response = json.loads(get_data_grafana(cmssst_index['id'], clean_str_query).text.encode('utf8'))
-
-print(response)
-
 
 # https://monit-kibana.cern.ch/kibana/goto/5fe46c5bfee70d9130675552cfd60212
+
+"""
+
+
+class Jobs(AbstractQueries, ABC):
+    def __init__(self, time_slot):
+        super().__init__(time_slot)
+        self.index_name = "monit_prod_condor_raw_metric*"
+        self.index_id = "9668"
+
+
+if __name__ == "__main__":
+    time = Time(days=2).time_slot
+    jobs = Jobs(time)
+    kibana_query = "data.DESIRED_Sites:T2_US_MIT AND data.Type:test"
+    query_general = jobs.get_query(kibana_query=kibana_query)
+
+    response = jobs.get_response(query_general)
+
+    print(response)
+
+
 
 
 

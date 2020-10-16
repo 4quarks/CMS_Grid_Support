@@ -1,7 +1,9 @@
 class Constants:
     AND = ' AND '
+    AND_SIGN = '&'
     QUOTE = "\""
-    INCLUDED = "/.*{}.*/"
+    INCLUDED = ".*{}.*"
+    EXPRESSION = "/{}/"
 
 
 

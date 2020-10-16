@@ -1,7 +1,5 @@
-import datetime
-import json
-from query_utils import get_data_grafana, get_str_lucene_query
-from constants import Constants as Cte
+from query_utils import *
+
 
 """
 ---------------------------------------------------------------------------------
@@ -45,27 +43,31 @@ data.status 	error
 data.type 	link
 metadata.path 	fts15min
 ---------------------------------------------------------------------------------
+HC find job with error:
+https://monit-kibana.cern.ch/kibana/goto/d9b1f68e937ac932bd1cd5941541b4a5
+https://monit-kibana.cern.ch/kibana/goto/beceac1344613eeeba9d95edba4c97be
+
 
 """
 
 
-# query_hc = "data.name:T2_US_Florida AND data.status:ok AND metadata.path:hc15min"
-#
-# query_sam_test = "data.dst_hostname:lcgce02.phy.bris.ac.uk AND data.metric_name:'org.sam.CONDOR-JobSubmit-/cms/Role=lcgadmin'"
-#
-# hostname = "lcgce02.phy.bris.ac.uk"
-# status = "CRITICAL"
-# query_sam_failed = "data.dst_hostname:{} AND data.status:{}".format(hostname, status)
-#
-#
-#
-#
-# now_datetime = datetime.datetime.now()
-# yesterday_datetime = now_datetime - datetime.timedelta(hours=1)
-# max_time = round(datetime.datetime.timestamp(now_datetime)) * 1000
-# min_time = round(datetime.datetime.timestamp(yesterday_datetime)) * 1000
-#
-#
+class CMSSST(AbstractQueries, ABC):
+    def __init__(self, time_slot):
+        super().__init__(time_slot)
+        self.index_name = "monit_prod_cmssst*"
+        self.index_id = "9475"
+
+
+if __name__ == "__main__":
+    time = Time(days=2).time_slot
+    sam = CMSSST(time)
+    kibana_query = "data.name:T1_UK_RAL AND metadata.path:hc15min"
+
+    query_general = sam.get_query(kibana_query=kibana_query)
+
+    response = sam.get_response(query_general)
+
+    print(response)
 
 
 
