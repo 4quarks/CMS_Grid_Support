@@ -71,7 +71,7 @@ data.ExitStatus 	0
 data.JobFailed 	0
 ------------------------------------------------
 
-# https://monit-kibana.cern.ch/kibana/goto/5fe46c5bfee70d9130675552cfd60212
+https://monit-kibana.cern.ch/kibana/goto/5fe46c5bfee70d9130675552cfd60212
 
 """
 

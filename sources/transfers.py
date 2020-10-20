@@ -37,6 +37,8 @@ data.state	unknown
 data.transfer_endpoint 	https://fts3.cern.ch:8446
 data.src_url 	srm://gfe02.grid.hep.ph.ic.ac.uk:8443/srm/managerv2?SFN=/pnfs/hep.ph.ic.ac.uk/data/cms/.../tree_54.root
 data.dst_url 	srm://stormfe1.pi.infn.it:8444/srm/managerv2?SFN=/cms/.../tree_54.root
+data.source_se 	srm://dcache-se-cms.desy.de
+data.dest_se 	gsiftp://gridftp.accre.vanderbilt.edu
 data.name 	/store/.../tree_54.root
 """
 """
@@ -82,6 +84,22 @@ class Transfers(AbstractQueries, ABC):
         self.index_name = "monit_prod_fts_raw_*"
         self.index_id = "9233"
 
+    def create_str_link(self, origin, destination):
+        return str(origin) + '__' + destination
+
+    def group_data(self, grouped_all, min_dict, group_ref):
+        # group_ref = group_ref[:20]
+        if group_ref not in list(grouped_all.keys()):
+            grouped_all.update({group_ref: [min_dict]})
+        else:
+            for element in grouped_all[group_ref]:
+                if element['pfn_from'] == min_dict['pfn_from'] and element['pfn_to'] == min_dict['pfn_to']:
+                    element['num'] = + 1
+
+                else:
+                    grouped_all[group_ref].append(min_dict)
+        return grouped_all
+
     def get_grouped_errors(self, response_clean):
         """
         Get all errors and the source/destination PFNs
@@ -96,22 +114,35 @@ class Transfers(AbstractQueries, ABC):
                 "lfn": "/store/PhEDEx_LoadTest07_4/LoadTest07_CERN_196/.../file.root"}, ...
             ]
         """
-        response_grouped = {}
+        grouped_by_error = {}
+        grouped_by_site = {}
         for error in response_clean:
             # Extract useful data
-            error_log = error["data"]["reason"]
-            destination = get_pfn_without_path(error["data"]["dst_url"])
-            origin = get_pfn_without_path(error["data"]["src_url"])
-            clean_lfn = pfn_to_lfn(error["data"]["src_url"])
+            if "reason" in error["data"].keys():
+                error_log = error["data"]["reason"]
+                # Source
+                pfn_src = error["data"]["src_url"]
+                source = error["data"]["source_se"].split('://')[1]
+                # Destination
+                pfn_dst = error["data"]["dst_url"]
+                destination = error["data"]["dest_se"].split('://')[1]
 
-            min_data = {'to': destination, 'from': origin, 'lfn': clean_lfn}
-            if error_log not in list(response_grouped.keys()):
-                response_grouped.update({error_log: [min_data]})
-            else:
-                response_grouped[error_log].append(min_data)
-        return response_grouped
+                min_data = {'pfn_from': pfn_src, 'pfn_to': pfn_dst, 'num': 1}
 
-    def get_lfn_per_error(self, response_grouped):
+                # Append Error data
+                min_error = deepcopy(min_data)
+                min_error.update({'se_from': source, 'se_to': destination})
+                grouped_by_error = self.group_data(grouped_by_error, min_error, error_log)
+
+                # Append site data
+                min_sites = deepcopy(min_data)
+                min_sites.update({'error': error_log})
+                link = self.create_str_link(source, destination)
+                grouped_by_site = self.group_data(grouped_by_site, min_sites, link)
+
+        return grouped_by_error, grouped_by_site
+
+    def get_lfn_per_error(self, grouped_by_error):
         """
         Get LFNs with the error:
         :param response_grouped: output --> get_grouped_errors
@@ -127,11 +158,11 @@ class Transfers(AbstractQueries, ABC):
         }
         """
         all_errors = []
-        for error, list_sources in response_grouped.items():
-            all_errors.append({error: count_repeated_elements_list([source['lfn'] for source in list_sources if source['lfn'] ])})
+        for error, list_min_data in grouped_by_error.items():
+            all_errors.append({error: [{min_data['lfn']: min_data['num']} for min_data in list_min_data]})
         return all_errors
 
-    def get_error_per_type(self, response_grouped):
+    def get_error_per_type(self, grouped_by_error):
         """
         Count the number of errors
 
@@ -144,26 +175,36 @@ class Transfers(AbstractQueries, ABC):
             ...
         }
         """
-        return count_repeated_elements_list(list(response_grouped.keys()))
+        return count_repeated_elements_list(list(grouped_by_error.keys()))
 
 
 if __name__ == "__main__":
-    time = Time(days=2).time_slot
+    time = Time(hours=6).time_slot
     fts = Transfers(time)
-    query = fts.get_query(kibana_query="data.vo:cms AND data.reason:/.*mismatch.*/")
+    query = fts.get_query(kibana_query="data.vo:cms AND data.source_se:/.*dcache-se-cms.desy.de.*/ "
+                                       "AND data.file_state:FAILED AND NOT data.dest_se:\"srm://se3.itep.ru\"")
     response = fts.get_response(query)
-    response_grouped_ = fts.get_grouped_errors(response)
-    lfn_errors = fts.get_lfn_per_error(response_grouped_)
-    dict_num_type_errors = fts.get_error_per_type(response_grouped_)
+    grouped_by_error_, grouped_by_site_ = fts.get_grouped_errors(response)
 
-    """
-    # Write json file with the results
-    json_output = json.dumps(lfn_errors)
-    with open('~/Desktop/output.txt', 'w') as outfile:
-        json.dump(json_output, outfile)
-    """
-    print(json.dumps(lfn_errors))
+    print('grouped_by_error_')
+    json_errors = json.dumps(grouped_by_error_)
+    print(json_errors, '\n')
+    with open('errors_grouped_CNAF.json', 'w') as outfile:
+        json.dump(grouped_by_error_, outfile)
 
+    print('grouped_by_site_')
+    json_sites = json.dumps(grouped_by_site_)
+    print(json_sites, '\n')
+    with open('sites_grouped_CNAF.json', 'w') as outfile:
+        json.dump(grouped_by_site_, outfile)
+
+    # print('lfn_errors')
+    # lfn_errors = fts.get_lfn_per_error(grouped_by_error_)
+    # print(json.dumps(lfn_errors), '\n')
+
+    # print('dict_num_type_errors')
+    # dict_num_type_errors = fts.get_error_per_type(grouped_by_error_)
+    # print(json.dumps(dict_num_type_errors), '\n')
 
 
 

@@ -17,7 +17,7 @@ data.status_code 1
 data.summary OK: COMPLETED.
 data.vo cms
 
-# https://monit-kibana-acc.cern.ch/kibana/goto/a297815a5ad0689f8dfa5cb6b4c0a8ef
+https://monit-kibana-acc.cern.ch/kibana/goto/a297815a5ad0689f8dfa5cb6b4c0a8ef
 """
 
 
@@ -32,12 +32,12 @@ if __name__ == "__main__":
     time = Time(days=2).time_slot
     sam = SAMTest(time)
 
-    kibana_query = "data.metric_name:\"org.sam.CONDOR-JobSubmit-/cms/Role=lcgadmin\" AND data.status:CRITICAL"
+    kibana_query = "data.metric_name:\"org.cms.SE-xrootd-read\" AND data.status:CRITICAL AND data.dst_experiment_site:T2_FR_IPHC"
     query_general = sam.get_query(kibana_query=kibana_query)
 
     response = sam.get_response(query_general)
-
-    print(response)
+    for error in response:
+        print(error['data']['details'].split('[ERROR]')[1])
 
 
 """

@@ -6,6 +6,7 @@ from constants import Constants as Cte
 import datetime
 from abc import ABC, abstractmethod
 
+
 def get_data_grafana(url_idx, query):
     url = "https://monit-grafana.cern.ch/api/datasources/proxy/" + url_idx + "/_msearch"
     headers = {'Content-Type': 'application/json', 'Authorization': os.environ["GRAFANA_KEY"]}
@@ -69,18 +70,12 @@ def get_clean_results(raw_results):
     return [element["_source"] for element in raw_results['responses'][0]['hits']['hits']]
 
 
-def pfn_to_lfn(pfn):
-    lfn = ""
-    if "/store" in pfn:
-        lfn = "/store" + pfn.split("/store")[1]
-    return lfn
-
-
-def get_pfn_without_path(pfn):
-    reduced_pfn = ""
-    if "/store" in pfn:
-        reduced_pfn = pfn.split("/store")[0]
-    return reduced_pfn
+def get_lfn_and_short_pfn(raw_pfn):
+    lfn, reduced_pfn = "", ""
+    if "/store" in raw_pfn:
+        lfn = "/store" + raw_pfn.split("/store")[1]
+        reduced_pfn = raw_pfn.split("/store")[0]
+    return lfn, reduced_pfn
 
 
 def count_repeated_elements_list(list_elements):
@@ -141,28 +136,5 @@ class AbstractQueries(ABC):
         raw_response = json.loads(get_data_grafana(self.index_id, clean_query).text.encode('utf8'))
         response_clean = get_clean_results(raw_response)
         return response_clean
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
