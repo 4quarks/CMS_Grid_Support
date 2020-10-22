@@ -88,16 +88,18 @@ class Transfers(AbstractQueries, ABC):
         return str(origin) + '__' + destination
 
     def group_data(self, grouped_all, min_dict, group_ref):
-        # group_ref = group_ref[:20]
         if group_ref not in list(grouped_all.keys()):
             grouped_all.update({group_ref: [min_dict]})
         else:
-            for element in grouped_all[group_ref]:
+            matched_element = False
+            for idx, element in enumerate(grouped_all[group_ref]):
                 if element['pfn_from'] == min_dict['pfn_from'] and element['pfn_to'] == min_dict['pfn_to']:
-                    element['num'] = + 1
+                    grouped_all[group_ref][idx]['num'] = grouped_all[group_ref][idx]['num'] + 1
+                    matched_element = True
+                    break
 
-                else:
-                    grouped_all[group_ref].append(min_dict)
+            if not matched_element:
+                grouped_all[group_ref].append(min_dict)
         return grouped_all
 
     def get_grouped_errors(self, response_clean):
@@ -159,7 +161,11 @@ class Transfers(AbstractQueries, ABC):
         """
         all_errors = []
         for error, list_min_data in grouped_by_error.items():
-            all_errors.append({error: [{min_data['lfn']: min_data['num']} for min_data in list_min_data]})
+            list_lfn = []
+            for min_data in list_min_data:
+                lfn, _ = get_lfn_and_short_pfn(min_data['pfn_from'])
+                list_lfn.append(lfn)
+            all_errors.append({error: list(dict.fromkeys(list_lfn))})
         return all_errors
 
     def get_error_per_type(self, grouped_by_error):
@@ -179,28 +185,30 @@ class Transfers(AbstractQueries, ABC):
 
 
 if __name__ == "__main__":
-    time = Time(hours=6).time_slot
+    time = Time(hours=48).time_slot
     fts = Transfers(time)
-    query = fts.get_query(kibana_query="data.vo:cms AND data.source_se:/.*dcache-se-cms.desy.de.*/ "
-                                       "AND data.file_state:FAILED AND NOT data.dest_se:\"srm://se3.itep.ru\"")
+    error = "User timeout over"
+    # kibana_query = "data.vo:cms AND source_se:/.*storm.ifca.es.*/ AND data.reason:/.*\"{}\".*/".format(error)
+    kibana_query = "data.vo:cms AND data.dest_se:/.*srm-cms.gridpp.rl.ac.uk.*/ AND data.file_state:FAILED AND NOT data.source_se:/.*se3.itep.ru.*/"
+    query = fts.get_query(kibana_query=kibana_query)
     response = fts.get_response(query)
     grouped_by_error_, grouped_by_site_ = fts.get_grouped_errors(response)
 
     print('grouped_by_error_')
     json_errors = json.dumps(grouped_by_error_)
-    print(json_errors, '\n')
-    with open('errors_grouped_CNAF.json', 'w') as outfile:
-        json.dump(grouped_by_error_, outfile)
+    # print(json_errors, '\n')
+    # with open('timeouts_DESY.json', 'w') as outfile:
+    #     json.dump(grouped_by_error_, outfile)
 
     print('grouped_by_site_')
     json_sites = json.dumps(grouped_by_site_)
-    print(json_sites, '\n')
-    with open('sites_grouped_CNAF.json', 'w') as outfile:
-        json.dump(grouped_by_site_, outfile)
+    # print(json_sites, '\n')
+    # with open('timeouts_CNAF.json', 'w') as outfile:
+    #     json.dump(grouped_by_site_, outfile)
 
-    # print('lfn_errors')
-    # lfn_errors = fts.get_lfn_per_error(grouped_by_error_)
-    # print(json.dumps(lfn_errors), '\n')
+    print('lfn_errors')
+    lfn_errors = fts.get_lfn_per_error(grouped_by_error_)
+    print(json.dumps(lfn_errors), '\n')
 
     # print('dict_num_type_errors')
     # dict_num_type_errors = fts.get_error_per_type(grouped_by_error_)
