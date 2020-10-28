@@ -5,7 +5,8 @@ from copy import deepcopy
 from constants import Constants as Cte
 import datetime
 from abc import ABC, abstractmethod
-
+import re
+from mongotools import MongoDB
 
 def get_data_grafana(url_idx, query):
     url = "https://monit-grafana.cern.ch/api/datasources/proxy/" + url_idx + "/_msearch"
@@ -46,7 +47,19 @@ BASIC_QUERY = {
 }
 
 
-def get_str_lucene_query(index_es, min_time, max_time, query):
+def unique_elem_list(list_repeated_elem):
+    return list(dict.fromkeys(list_repeated_elem))
+
+
+def timestamp_to_human_utc(timestamp):
+    human_time = ""
+    if "int" in str(type(timestamp)):
+        human_time = datetime.datetime.utcfromtimestamp(timestamp/1000).strftime('%d-%m-%Y %H:%M')
+    return human_time
+
+
+def get_str_lucene_query(index_es, min_time, max_time, query, max_results):
+    BASIC_QUERY["size"] = max_results
     first_query = deepcopy(FIRST_QUERY)
     basic_query = deepcopy(BASIC_QUERY)
 
@@ -83,29 +96,36 @@ def count_repeated_elements_list(list_elements):
 
 
 class Time:
-    def __init__(self, days=0, hours=12, minutes=0, seconds=0):
+    def __init__(self, days=0, hours=0, minutes=0, seconds=0):
         self.days = days
         self.hours = hours
         self.minutes = minutes
         self.seconds = seconds
         self.time_slot = self.translate_time()
+        self.time_slot_hr = [self.datetime_to_human(self.time_slot[0]), self.datetime_to_human(self.time_slot[1])]
 
     def translate_time(self):
-        now_datetime = datetime.datetime.now()
+        now_datetime = datetime.datetime.utcnow()
         previous_datetime = now_datetime - datetime.timedelta(days=self.days, hours=self.hours, minutes=self.minutes,
                                                               seconds=self.seconds)
         max_time = round(datetime.datetime.timestamp(now_datetime)) * 1000
         min_time = round(datetime.datetime.timestamp(previous_datetime)) * 1000
         return [min_time, max_time]
 
+    def datetime_to_human(self, timestamp):
+        return datetime.datetime.utcfromtimestamp(int(timestamp/1000)).strftime('%d-%m-%Y %H:%M')
+
 
 class AbstractQueries(ABC):
-    def __init__(self, time_slot):
+    def __init__(self, time_class):
         self.index_name = ""
         self.index_id = ""
-        self.time_slot = time_slot
+        self.time_class = time_class
 
-    def get_query(self, kibana_query=""):
+    def get_direct_response(self, kibana_query, max_results=500):
+        return self.get_response(self.get_query(kibana_query, max_results))
+
+    def get_query(self, kibana_query="", max_results=500):
         """
 
         :param kibana_query:
@@ -117,7 +137,9 @@ class AbstractQueries(ABC):
         clean_str_query = ""
         if kibana_query:
             raw_query = kibana_query
-            clean_str_query = get_str_lucene_query(self.index_name, self.time_slot[0], self.time_slot[1], raw_query)
+            clean_str_query = get_str_lucene_query(self.index_name,
+                                                   self.time_class.time_slot[0], self.time_class.time_slot[1],
+                                                   raw_query, max_results)
         return clean_str_query
 
     def get_response(self, clean_query):

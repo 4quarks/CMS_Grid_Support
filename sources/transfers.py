@@ -1,4 +1,8 @@
 from query_utils import *
+import spacy
+
+NLP = spacy.load("en_core_web_lg")
+THRESHOLD = 0.99
 
 """
 ######################## monit_prod_cms_rucio_enr*  ########################
@@ -79,20 +83,41 @@ query = "data.dst_url:/.*storm-fe-cms.cr.cnaf.infn.it.*/ AND data.file_state:FAI
 
 
 class Transfers(AbstractQueries, ABC):
-    def __init__(self, time_slot):
-        super().__init__(time_slot)
+    def __init__(self, time_class):
+        super().__init__(time_class)
         self.index_name = "monit_prod_fts_raw_*"
         self.index_id = "9233"
+        self.mongo = MongoDB()
 
     def create_str_link(self, origin, destination):
         return str(origin) + '__' + destination
 
-    def group_data(self, grouped_all, min_dict, group_ref):
-        if group_ref not in list(grouped_all.keys()):
+    def value_in_list(self, value, list_values, strict_comparison=False):
+        in_list = False
+        similar_value = value
+        if strict_comparison:
+            if value in list_values:
+                in_list = True
+        else:
+            doc = NLP(value)
+            for a in list_values:
+                if a:
+                    doc1 = NLP(a)  # Finding the similarity
+                    score = doc.similarity(doc1)
+                    if score > THRESHOLD:
+                        in_list = True
+                        similar_value = a
+                        break
+        return in_list, similar_value
+
+    def group_data(self, grouped_all, min_dict, group_ref, existent_element):
+        # value_in_list, similar_value = self.value_in_list(group_ref,  list(grouped_all.keys()), strict_comparison)
+        if not existent_element:
             grouped_all.update({group_ref: [min_dict]})
         else:
             matched_element = False
             for idx, element in enumerate(grouped_all[group_ref]):
+                # SAME ERROR & SAME PFN --> SAME ISSUE
                 if element['pfn_from'] == min_dict['pfn_from'] and element['pfn_to'] == min_dict['pfn_to']:
                     grouped_all[group_ref][idx]['num'] = grouped_all[group_ref][idx]['num'] + 1
                     matched_element = True
@@ -101,6 +126,20 @@ class Transfers(AbstractQueries, ABC):
             if not matched_element:
                 grouped_all[group_ref].append(min_dict)
         return grouped_all
+
+    def get_user(self, error_log):
+        """
+        :param error_log: Disk quota exceeded
+        """
+        users = []
+        raw_users = re.findall("/user/(.*)/", str(error_log))
+        for user in raw_users:
+            clean_user = user.split("/")[0].strip("")
+            # if clean_user == "ddirmait":
+            #     print()
+            users.append(clean_user)
+
+        return unique_elem_list(users)
 
     def get_grouped_errors(self, response_clean):
         """
@@ -118,30 +157,55 @@ class Transfers(AbstractQueries, ABC):
         """
         grouped_by_error = {}
         grouped_by_site = {}
+        list_users = []
+        errors_grouped_nlp = {}
         for error in response_clean:
             # Extract useful data
             if "reason" in error["data"].keys():
-                error_log = error["data"]["reason"]
+                error_log = error["data"]["reason"].strip("")
+                user = self.get_user(error_log)
+                if user:
+                    list_users.append(user)
+
                 # Source
-                pfn_src = error["data"]["src_url"]
-                source = error["data"]["source_se"].split('://')[1]
+                pfn_src = error["data"]["src_url"].strip("")
+                source = error["data"]["source_se"].split('://')[1].strip("")
                 # Destination
                 pfn_dst = error["data"]["dst_url"]
-                destination = error["data"]["dest_se"].split('://')[1]
+                destination = error["data"]["dest_se"].split('://')[1].strip("")
 
-                min_data = {'pfn_from': pfn_src, 'pfn_to': pfn_dst, 'num': 1}
+                min_data = {'pfn_from': pfn_src, 'pfn_to': pfn_dst, 'num': 1, 'error': error_log}
 
                 # Append Error data
-                min_error = deepcopy(min_data)
-                min_error.update({'se_from': source, 'se_to': destination})
-                grouped_by_error = self.group_data(grouped_by_error, min_error, error_log)
+                if error_log:
+                    min_error = deepcopy(min_data)
+                    min_error.update({'se_from': source, 'se_to': destination})
+                    error_in_list, similar_error = self.value_in_list(error_log, list(grouped_by_error.keys()))
+                    grouped_by_error = self.group_data(grouped_by_error, min_error, similar_error, error_in_list)
 
-                # Append site data
-                min_sites = deepcopy(min_data)
-                min_sites.update({'error': error_log})
-                link = self.create_str_link(source, destination)
-                grouped_by_site = self.group_data(grouped_by_site, min_sites, link)
+                    if similar_error != error_log:
+                        if similar_error not in errors_grouped_nlp.keys():
+                            errors_grouped_nlp.update({similar_error: []})
+                        errors_grouped_nlp[similar_error].append(error_log)
+                    # Append site data
+                    min_sites = deepcopy(min_data)
+                    link = self.create_str_link(source, destination)
+                    link_in_list, similar_link = self.value_in_list(link, list(grouped_by_site.keys()),
+                                                                    strict_comparison=True)
+                    grouped_by_site = self.group_data(grouped_by_site, min_sites, similar_link, link_in_list)
 
+        # print("users: ", unique_elem_list(sum(list_users, [])))
+        """
+        # TODO: change keywords
+        for key_error, list_errors in errors_grouped_nlp.items():
+            diff = []
+            for c in list_errors:
+                common_words = unique_elem_list(c.split()+key_error.split())
+                different_words = list(set(common_words) - set(c.split()))
+                diff.append(different_words)
+            print()
+        print(json.dumps(errors_grouped_nlp))
+        """
         return grouped_by_error, grouped_by_site
 
     def get_lfn_per_error(self, grouped_by_error):
@@ -160,13 +224,15 @@ class Transfers(AbstractQueries, ABC):
         }
         """
         all_errors = []
+        all_list_lfn = []
         for error, list_min_data in grouped_by_error.items():
             list_lfn = []
             for min_data in list_min_data:
                 lfn, _ = get_lfn_and_short_pfn(min_data['pfn_from'])
                 list_lfn.append(lfn)
-            all_errors.append({error: list(dict.fromkeys(list_lfn))})
-        return all_errors
+                all_list_lfn.append(lfn)
+            all_errors.append({error: unique_elem_list(list_lfn)})
+        return all_errors, unique_elem_list(all_list_lfn)
 
     def get_error_per_type(self, grouped_by_error):
         """
@@ -183,36 +249,53 @@ class Transfers(AbstractQueries, ABC):
         """
         return count_repeated_elements_list(list(grouped_by_error.keys()))
 
+    def get_data_from_to_host(self, hostname, direction="source_se", error=""):
+        kibana_query = "data.vo:cms AND data.file_state:FAILED AND data.{}:/.*{}.*/ ".format(direction, hostname)
+        if error:
+            kibana_query += " AND data.reason:/.*\"{}\".*/".format(error)
+        response = self.get_direct_response(kibana_query=kibana_query, max_results=2000)
+        grouped_by_error, grouped_by_site = self.get_grouped_errors(response)
+        lfn_errors, _ = self.get_lfn_per_error(grouped_by_error)
+        host_data = {}
+        if grouped_by_error and grouped_by_site:
+            host_data = {"time_range_UTC": self.time_class.time_slot_hr,
+                         "grouped_by_error": grouped_by_error,
+                         "grouped_by_site": grouped_by_site,
+                         "list_lfn": lfn_errors}
+        return host_data
+
+    def analyze_site(self, site_name="", hostname="", error=""):
+        all_data = {}
+        if not hostname and site_name:
+            list_site_info = self.mongo.find_document(self.mongo.vofeed, {"site": site_name, "flavour": "SRM"})
+            if list_site_info:
+                hosts_name = [info["hostname"] for info in list_site_info if info]
+                for hostname in hosts_name:
+                    data_host = {}
+                    for direction in ["source_se", "dest_se"]:
+                        direction_data = self.get_data_from_to_host(hostname, direction=direction, error=error)
+                        if direction_data:
+                            data_host.update({direction: direction_data})
+                    all_data.update({hostname: data_host})
+        return all_data
+
 
 if __name__ == "__main__":
-    time = Time(hours=48).time_slot
-    fts = Transfers(time)
+    time_class = Time(hours=2)
+    fts = Transfers(time_class)
+    # a = fts.analyze_site(hostname="srm-cms.gridpp.rl.ac.uk")
+    a = fts.analyze_site(site_name="T1_US_FNAL", error="CHECKSUM")
+    with open('all.json', 'w') as outfile:
+        json.dump(a, outfile)
+    print()
     error = "User timeout over"
     # kibana_query = "data.vo:cms AND source_se:/.*storm.ifca.es.*/ AND data.reason:/.*\"{}\".*/".format(error)
-    kibana_query = "data.vo:cms AND data.dest_se:/.*srm-cms.gridpp.rl.ac.uk.*/ AND data.file_state:FAILED AND NOT data.source_se:/.*se3.itep.ru.*/"
-    query = fts.get_query(kibana_query=kibana_query)
-    response = fts.get_response(query)
-    grouped_by_error_, grouped_by_site_ = fts.get_grouped_errors(response)
+    # kibana_query = "data.vo:cms  AND data.source_se:/.*gftp.t2.ucsd.edu.*/ AND data.file_state:FAILED " \
+    #                "AND data.reason:/.*CHECKSUM.*|.*No such file.*/"
 
-    print('grouped_by_error_')
-    json_errors = json.dumps(grouped_by_error_)
-    # print(json_errors, '\n')
-    # with open('timeouts_DESY.json', 'w') as outfile:
-    #     json.dump(grouped_by_error_, outfile)
-
-    print('grouped_by_site_')
-    json_sites = json.dumps(grouped_by_site_)
-    # print(json_sites, '\n')
-    # with open('timeouts_CNAF.json', 'w') as outfile:
-    #     json.dump(grouped_by_site_, outfile)
-
-    print('lfn_errors')
-    lfn_errors = fts.get_lfn_per_error(grouped_by_error_)
-    print(json.dumps(lfn_errors), '\n')
-
-    # print('dict_num_type_errors')
-    # dict_num_type_errors = fts.get_error_per_type(grouped_by_error_)
-    # print(json.dumps(dict_num_type_errors), '\n')
-
-
-
+    # endpoint = "srm-cms.gridpp.rl.ac.uk"
+    # # reason = "AND data.reason:/.*\"User timeout over\".*/"
+    # reason = ""
+    # kibana_query = "data.vo:cms AND data.file_state:FAILED AND " \
+    #                "(data.source_se:/.*{}.*/ OR data.dest_se:/.*{}.*/) {}".format(endpoint, endpoint, reason)
+    # # kibana_query = "data.vo:cms  AND data.dest_se:/.*eoscmsftp.cern.ch.*/ AND data.file_state:FAILED"

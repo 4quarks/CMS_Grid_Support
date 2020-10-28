@@ -1,6 +1,5 @@
 from query_utils import *
 
-
 """
 ---------------------------------------------------------------------------------
 sts15min
@@ -20,8 +19,17 @@ data.manual_crab 	enabled
 data.detail 	Life: manual override by rmaciula (Tier-1s are never put into Waiting Room or Morgue state),
                 Prod: Emerging downtime, [current],
                 Crab: manual override by lammel (very few CRAB jobs currently being scheduled at KIT)
+                
+
 ---------------------------------------------------------------------------------
-fts15min, sam15min, hc15min
+metadata.path 	down15min
+
+data.detail 	All CEs (ce-1.grid.vbc.ac.at), all XROOTDs (eos.grid.vbc.ac.at)
+data.duration 	1,603,346,400, 1,603,807,200
+data.status 	downtime
+
+---------------------------------------------------------------------------------
+fts15min, sam15min, hc15min, sr15min --> "15min", "1hour", "6hour", "1day"
 ----------
 data.detail 	3 Success [crab3@vocms0137.cern.ch#55922252.0#1601902070 201005_001640:sciaba_crab_ .....
 data.name 	T2_IT_Bari
@@ -41,6 +49,14 @@ data.detail 	cmsrm-cream01.roma1.infn.it/CE (unknown)
                 cmsrm-xrootd01.roma1.infn.it/XRD (unknown)
                 cmsrm-xrootd02.roma1.infn.it/XRD (unknown)
 
+
+metadata.path 	sr1hour
+data.detail 	SAM: ok (15min evaluations: 4 ok, 0 warning, 0 error, 0 unknown, 0 downtime (0h0m)),
+                HC: ok (7 Success ...; 1 Success, no Chirp ExitCode ...),
+                FTS: ok (Links: 9/9 ok, 0/3 warning, 0/0 error, 1/1 unknown, 0/0 bad-endpoint; storage01.lcg.cscs.ch: ok/ok)
+data.value 	0.75
+
+	
 -------------
 data.detail 	trn_timeout: 34 files, 0.0 GB [https://fts3.cern.ch:8449/fts3/ftsmon/#/job/3b664b36-070c-11eb...]
                 trn_error: 32 files, 0.0 GB [https://fts3.cern.ch:8449/fts3/ftsmon/#/job/d518140c-070d-11eb-a...]
@@ -65,58 +81,98 @@ data.RemoveReason:/"Removed due to wall clock limit"/
 """
 
 
-class CMSSST(AbstractQueries, ABC):
-    def __init__(self, time_slot):
+class AbstractSiteStatus(AbstractQueries, ABC):
+    def __init__(self, str_freq, time_slot, site_name, metric, specific_fields=None):
         super().__init__(time_slot)
         self.index_name = "monit_prod_cmssst*"
         self.index_id = "9475"
+        self.metric = metric
+        self.specific_fields = specific_fields
 
+        self.str_freq = str_freq
 
-class SiteStatus(CMSSST):
-    def __init__(self, site_name, time_slot):
-        super().__init__(time_slot)
         self.site_name = site_name
-        self.query = "data.name:{} AND metadata.path:{}"
 
-    def get_response_shortcut(self, test):
-        return self.get_response(self.get_query(self.query.format(self.site_name, test)))
+        self.response = self.get_response_shortcut()
 
-    def get_evaluation_hc(self):
-        response = self.get_response_shortcut("hc15min")
-        for hc_test in response:
-            status = hc_test["data"]["status"]
-            if status == "error":
-                detail_error = hc_test["data"]["detail"]
-                print()
+    def get_kibana_query(self):
+        kibana_query = "metadata.path:" + self.metric + self.str_freq
+        if self.site_name:
+            kibana_query += "AND data.name:"+self.site_name
+        return kibana_query
 
-        print()
+    def get_response_shortcut(self):
+        kibana_query = self.get_kibana_query()
+        return self.get_response(self.get_query(kibana_query))
 
-    def get_evaluation_sam(self):
-        response = self.get_response(self.get_query(self.get_kibana_query("sam15min")))
+    def get_specific_data(self, test=None):
+        specific_data = {}
+        if self.specific_fields:
+            for field_name in self.specific_fields:
+                if field_name and test and field_name in test["data"].keys():
+                    field_value = test["data"][field_name]
+                    specific_data.update({field_name: field_value})
+        return specific_data
+
+    def get_common_data(self, test):
+        status = test["data"]["status"]
+        timestamp = test["metadata"]["timestamp"]
+        timestamp_hr = timestamp_to_human_utc(timestamp)
+        detail = test["data"]["detail"]
+
+        return status, timestamp, timestamp_hr, detail
+
+    def get_issues(self):
+        issues = []
+        for test in self.response:
+            issue = {}
+            status, timestamp, timestamp_hr, detail = self.get_common_data(test)
+            issue_occurred = True
+            if status == "ok":
+                issue_occurred = False
+            if issue_occurred:
+                issue.update(self.get_specific_data(test))
+                # Details
+                if detail:
+                    issue.update({"detail": detail})
+                issue.update({"status": status, "timestamp": timestamp, "timestamp_hr": timestamp_hr})
+                issues.append(issue)
+        return issues
 
 
-    def get_evaluation_fts(self):
-        response = self.get_response(self.get_query(self.get_kibana_query("fts15min")))
+class SAM(AbstractSiteStatus):
+    def __init__(self, str_freq, time_slot, site_name=""):
+        super().__init__(str_freq, time_slot, site_name=site_name, metric="sam")
 
 
-    def get_override(self):
-        response = self.get_response(self.get_query(self.get_kibana_query("sts15min")))
+class HammerCloud(AbstractSiteStatus):
+    def __init__(self, str_freq, time_slot, site_name=""):
+        super().__init__(str_freq, time_slot, site_name=site_name, metric="hc")
 
+
+class FTS(AbstractSiteStatus):
+    def __init__(self, str_freq, time_slot, site_name=""):
+        super().__init__(str_freq, time_slot, site_name=site_name, metric="fts", specific_fields=["quality"])
+
+
+class SiteReadiness(AbstractSiteStatus):
+    def __init__(self, site_name, str_freq, time_slot):
+        super().__init__(str_freq, time_slot, site_name=site_name, metric="sr", specific_fields=["value"])
+
+
+class Downtime(AbstractSiteStatus):
+    def __init__(self, str_freq, time_slot, site_name=""):
+        super().__init__(str_freq, time_slot, site_name=site_name, metric="down", specific_fields=["duration"])
+
+
+class SiteStatus(AbstractSiteStatus):
+    def __init__(self, str_freq, time_slot, site_name=""):
+        specific_fields = ["prod_status", "crab_status", "manual_life", "manual_prod", "manual_crab"]
+        super().__init__(str_freq, time_slot, site_name=site_name, metric="sts", specific_fields=specific_fields)
 
 
 if __name__ == "__main__":
-    time = Time(days=6).time_slot
-    sam = SiteStatus("T2_AT_Vienna", time)
-    sam.get_evaluation_hc()
-    # kibana_query = "data.name:T1_UK_RAL AND metadata.path:hc15min"
-    #
-    # query_general = sam.get_query(kibana_query=kibana_query)
-    #
-    # response = sam.get_response(query_general)
-
-    # print(response)
-
-
-
-
+    time = Time(hours=24).time_slot
+    sam = SiteStatus("15min", time, site_name="T2_AT_Vienna")
+    print(sam.get_issues())
 

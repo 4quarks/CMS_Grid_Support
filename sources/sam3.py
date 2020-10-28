@@ -32,12 +32,22 @@ if __name__ == "__main__":
     time = Time(days=2).time_slot
     sam = SAMTest(time)
 
-    kibana_query = "data.metric_name:\"org.cms.SE-xrootd-read\" AND data.status:CRITICAL AND data.dst_experiment_site:T2_FR_IPHC"
+    kibana_query = "data.metric_name:\"org.cms.SRM-VOPut-/cms/Role=production\" AND data.status:CRITICAL AND  data.dst_experiment_site:T2_GR_Ioannina"
     query_general = sam.get_query(kibana_query=kibana_query)
 
     response = sam.get_response(query_general)
+
+    servers_with_error = []
     for error in response:
-        print(error['data']['details'].split('[ERROR]')[1])
+
+        description_error = error['data']['details']
+        import re
+        a = re.findall("error accessing (grid[0-9]+.physics.uoi.gr)", str(description_error))
+        if a and a[0] not in servers_with_error:
+            servers_with_error.append(a[0])
+
+        print(a)
+    print()
 
 
 """
