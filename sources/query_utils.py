@@ -1,19 +1,12 @@
 import requests
 import os
-import json
+import json, time
 from copy import deepcopy
 from constants import Constants as Cte
 import datetime
 from abc import ABC, abstractmethod
 import re
 from mongotools import MongoDB
-
-def get_data_grafana(url_idx, query):
-    url = "https://monit-grafana.cern.ch/api/datasources/proxy/" + url_idx + "/_msearch"
-    headers = {'Content-Type': 'application/json', 'Authorization': os.environ["GRAFANA_KEY"]}
-    response = requests.request("POST", url, headers=headers, data=query)
-    return response
-
 
 FIRST_QUERY = {
     "search_type": "query_then_fetch",
@@ -77,10 +70,6 @@ def get_str_lucene_query(index_es, min_time, max_time, query, max_results):
     final_query = first_query_str + " \n" + clean_str_query + " \n"
 
     return final_query
-
-
-def get_clean_results(raw_results):
-    return [element["_source"] for element in raw_results['responses'][0]['hits']['hits']]
 
 
 def get_lfn_and_short_pfn(raw_pfn):
@@ -155,8 +144,13 @@ class AbstractQueries(ABC):
                     'dst_url': 'gsiftp://se.cis.gov.pl:2811/,
                     ...
         """
-        raw_response = json.loads(get_data_grafana(self.index_id, clean_query).text.encode('utf8'))
-        response_clean = get_clean_results(raw_response)
+        url = "https://monit-grafana.cern.ch/api/datasources/proxy/" + self.index_id + "/_msearch"
+        headers = {'Content-Type': 'application/json', 'Authorization': os.environ["GRAFANA_KEY"]}
+        raw_response = requests.request("POST", url, headers=headers, data=clean_query).text.encode('utf8')
+        json_response = json.loads(raw_response)
+        response_clean = []
+        if json_response:
+            response_clean = [element["_source"] for element in json_response['responses'][0]['hits']['hits']]
         return response_clean
 
 

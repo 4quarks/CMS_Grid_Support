@@ -1,8 +1,21 @@
 from query_utils import *
 import spacy
+import pandas as pd
+import xlsxwriter
 
 NLP = spacy.load("en_core_web_lg")
 THRESHOLD = 0.99
+KEYWORDS_ERRORS = ['srm_authorization_failure', 'overwrite is not enabled', 'internal server error',
+                   'no such file or directory', 'timeout of 360 seconds has been exceeded',
+                   'connection refused globus_xio', 'checksum',
+                   'source and destination file size mismatch', 'protocol family not supported', 'permission_denied',
+                   'srm_putdone error on the surl', 'srm_get_turl error on the turl', 'no route to host',
+                   "an end of file occurred", "stream ended before eod", 'handle not in the proper state',
+                   'unable to get quota space', 'received block with unknown descriptor', 'no data available',
+                   'file has no copy on tape and no diskcopies are accessible', 'valid credentials could not be found',
+                   'a system call failed: connection timed out', 'operation timed out', 'user timeout over',
+                   'idle timeout: closing control connection', 'system error in write into hdfs',
+                   'reports could not open connection to', 'closing xrootd file handle']
 
 """
 ######################## monit_prod_cms_rucio_enr*  ########################
@@ -79,6 +92,8 @@ query = "data.dst_url:/.*storm-fe-cms.cr.cnaf.infn.it.*/ AND data.file_state:FAI
 # 
 #     clean_str_query = get_str_lucene_query(self.index['name'], self.time_slot[0], self.time_slot[1], raw_query)
 #     return clean_str_query
+
+https://monit-kibana.cern.ch/kibana/goto/31129642d019649a5fe8ee3c816677e6
 """
 
 
@@ -92,40 +107,71 @@ class Transfers(AbstractQueries, ABC):
     def create_str_link(self, origin, destination):
         return str(origin) + '__' + destination
 
+    def preprocess_string_nlp(self, string):
+        return string.lower().strip()
+
+    def get_keyword(self, string):
+        keywords = [elem for elem in KEYWORDS_ERRORS if elem in string]
+        if len(keywords) > 1:
+            raise Exception('My error! {}, {}'.format(keywords, string))
+        if not keywords:
+            print()
+        return keywords
+
     def value_in_list(self, value, list_values, strict_comparison=False):
         in_list = False
         similar_value = value
+        keyword = ""
+
+        # DIRECT COMPARISON
         if strict_comparison:
             if value in list_values:
                 in_list = True
+        # USE NLP TO MATCH KEYBOARDS AND OTHER ERRORS
         else:
-            doc = NLP(value)
-            for a in list_values:
-                if a:
-                    doc1 = NLP(a)  # Finding the similarity
+            clean_value = self.preprocess_string_nlp(value)
+            doc = NLP(clean_value)
+            keywords_value = self.get_keyword(clean_value)
+            # TODO
+            if keywords_value:
+                keyword = keywords_value[0]
+            for value_list in list_values:
+                if value_list:
+                    clean_value_list = self.preprocess_string_nlp(value_list)
+                    doc1 = NLP(clean_value_list)  # Finding the similarity
                     score = doc.similarity(doc1)
-                    if score > THRESHOLD:
+                    keywords_value_list = self.get_keyword(clean_value_list)
+                    keywords_match = list(set(keywords_value) & set(keywords_value_list))
+                    if score > THRESHOLD or keywords_match:
                         in_list = True
-                        similar_value = a
+                        similar_value = value_list
                         break
-        return in_list, similar_value
+        return in_list, similar_value, keyword
 
-    def group_data(self, grouped_all, min_dict, group_ref, existent_element):
+    def group_data(self, grouped_by_error, min_dict, error_log):
         # value_in_list, similar_value = self.value_in_list(group_ref,  list(grouped_all.keys()), strict_comparison)
-        if not existent_element:
-            grouped_all.update({group_ref: [min_dict]})
+        error_in_list, similar_error, keyword = self.value_in_list(error_log, list(grouped_by_error.keys()))
+
+        if not keyword:
+            print('different error: ', similar_error)
+            error_ref = similar_error
+        else:
+            error_ref = keyword
+
+        if not error_in_list:
+            grouped_by_error.update({error_ref: [min_dict]})
         else:
             matched_element = False
-            for idx, element in enumerate(grouped_all[group_ref]):
+            for idx, element in enumerate(grouped_by_error[error_ref]):
                 # SAME ERROR & SAME PFN --> SAME ISSUE
                 if element['pfn_from'] == min_dict['pfn_from'] and element['pfn_to'] == min_dict['pfn_to']:
-                    grouped_all[group_ref][idx]['num'] = grouped_all[group_ref][idx]['num'] + 1
+                    grouped_by_error[error_ref][idx]['num_errors'] = grouped_by_error[error_ref][idx]['num_errors'] + 1
                     matched_element = True
                     break
 
             if not matched_element:
-                grouped_all[group_ref].append(min_dict)
-        return grouped_all
+                grouped_by_error[error_ref].append(min_dict)
+        return grouped_by_error
 
     def get_user(self, error_log):
         """
@@ -173,26 +219,24 @@ class Transfers(AbstractQueries, ABC):
                 # Destination
                 pfn_dst = error["data"]["dst_url"]
                 destination = error["data"]["dest_se"].split('://')[1].strip("")
+                timestamp = error["data"]["timestamp"]
 
-                min_data = {'pfn_from': pfn_src, 'pfn_to': pfn_dst, 'num': 1, 'error': error_log}
+                min_data = {'pfn_from': pfn_src, 'pfn_to': pfn_dst, 'num_errors': 1,
+                            'error': error_log, "timestamp": timestamp,
+                            "timestamp_hr": timestamp_to_human_utc(timestamp)}
 
                 # Append Error data
                 if error_log:
                     min_error = deepcopy(min_data)
                     min_error.update({'se_from': source, 'se_to': destination})
-                    error_in_list, similar_error = self.value_in_list(error_log, list(grouped_by_error.keys()))
-                    grouped_by_error = self.group_data(grouped_by_error, min_error, similar_error, error_in_list)
+                    grouped_by_error = self.group_data(grouped_by_error, min_error, error_log)
 
-                    if similar_error != error_log:
-                        if similar_error not in errors_grouped_nlp.keys():
-                            errors_grouped_nlp.update({similar_error: []})
-                        errors_grouped_nlp[similar_error].append(error_log)
                     # Append site data
-                    min_sites = deepcopy(min_data)
-                    link = self.create_str_link(source, destination)
-                    link_in_list, similar_link = self.value_in_list(link, list(grouped_by_site.keys()),
-                                                                    strict_comparison=True)
-                    grouped_by_site = self.group_data(grouped_by_site, min_sites, similar_link, link_in_list)
+                    # min_sites = deepcopy(min_data)
+                    # link = self.create_str_link(source, destination)
+                    # link_in_list, similar_link, _ = self.value_in_list(link, list(grouped_by_site.keys()),
+                    #                                                    strict_comparison=True)
+                    # grouped_by_site = self.group_data(grouped_by_site, min_sites, similar_link, link_in_list)
 
         # print("users: ", unique_elem_list(sum(list_users, [])))
         """
@@ -250,18 +294,29 @@ class Transfers(AbstractQueries, ABC):
         return count_repeated_elements_list(list(grouped_by_error.keys()))
 
     def get_data_from_to_host(self, hostname, direction="source_se", error=""):
-        kibana_query = "data.vo:cms AND data.file_state:FAILED AND data.{}:/.*{}.*/ ".format(direction, hostname)
+        kibana_query_ok = "data.vo:cms AND data.file_state:{} AND data.{}:/.*{}.*/ ".format("FINISHED", direction,
+                                                                                            hostname)
+        kibana_query_failed = "data.vo:cms AND data.file_state:{} AND data.{}:/.*{}.*/ ".format("FAILED", direction,
+                                                                                                hostname)
+
         if error:
-            kibana_query += " AND data.reason:/.*\"{}\".*/".format(error)
-        response = self.get_direct_response(kibana_query=kibana_query, max_results=2000)
-        grouped_by_error, grouped_by_site = self.get_grouped_errors(response)
+            kibana_query_failed += " AND data.reason:/.*\"{}\".*/".format(error)
+            response_failed = self.get_direct_response(kibana_query=kibana_query_failed, max_results=2000)
+        else:
+            response_failed = self.get_direct_response(kibana_query=kibana_query_failed, max_results=2000)
+            # response_ok = self.get_direct_response(kibana_query=kibana_query_ok, max_results=2000)
+            # num_failed = len(response_failed)
+            # num_ok = len(response_ok)
+            # quality = round(num_ok / num_failed, 3)
+
+        grouped_by_error, grouped_by_site = self.get_grouped_errors(response_failed)
         lfn_errors, _ = self.get_lfn_per_error(grouped_by_error)
         host_data = {}
-        if grouped_by_error and grouped_by_site:
+        if grouped_by_error:
             host_data = {"time_range_UTC": self.time_class.time_slot_hr,
                          "grouped_by_error": grouped_by_error,
-                         "grouped_by_site": grouped_by_site,
-                         "list_lfn": lfn_errors}
+                         "list_lfn": lfn_errors,
+                         "num_failed_transfers": len(response_failed)}
         return host_data
 
     def analyze_site(self, site_name="", hostname="", error=""):
@@ -273,22 +328,75 @@ class Transfers(AbstractQueries, ABC):
                 for hostname in hosts_name:
                     data_host = {}
                     for direction in ["source_se", "dest_se"]:
+                        time.sleep(1)
                         direction_data = self.get_data_from_to_host(hostname, direction=direction, error=error)
                         if direction_data:
                             data_host.update({direction: direction_data})
                     all_data.update({hostname: data_host})
         return all_data
 
+    def results_to_csv(self, json_results):
+        columns = ["timestamp", "timestamp_hr", "error", "se_from",
+                   "se_to", "pfn_from", "pfn_to", "num_errors"]
+        csv_results = []
+
+        for storage_element, se_value in json_results.items():
+            file_name = '{}.xlsx'.format(storage_element.replace(".", "-"))
+            writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
+            for direction, direction_value in se_value.items():
+                list_errors, list_groups = [], []
+                group_id = 1
+                for error_key, error_value in direction_value["grouped_by_error"].items():
+                    failed_transfers = 0
+                    for single_error in error_value:
+                        values_columns = [single_error[elem] for elem in columns]
+                        values_columns.append(group_id)
+
+                        list_errors.append(values_columns)
+
+                        failed_transfers += single_error["num_errors"]
+                    list_groups.append([group_id, error_key, len(error_value), failed_transfers])
+                    group_id += 1
+
+                # DF ERRORS
+                df = pd.DataFrame(list_errors, columns=columns + ["group_id"])
+                df.to_excel(writer, sheet_name=direction, index=False)
+
+                # DF LEGEND GROUPS
+                df_group = pd.DataFrame(list_groups, columns=["group_id", "error_ref", "num_diff_errors",
+                                                              "num_failed_transfers"])
+                df_group.to_excel(writer, sheet_name=direction, startcol=12, index=False)
+
+                # COLOR SHEET
+                worksheet = writer.sheets[direction]
+                column_id_error = "I1:I{}".format(str(len(list_errors) + 1))
+                worksheet.conditional_format(column_id_error, {'type': '3_color_scale'})  # ,
+                # 'min_color': "#878180",
+                # 'max_color': "#D4CCCB"
+                column_id_group = "M1:M{}".format(str(len(list_groups) + 1))
+                worksheet.conditional_format(column_id_group, {'type': '3_color_scale'})
+
+                print()
+            writer.save()
+        return csv_results
+
 
 if __name__ == "__main__":
-    time_class = Time(hours=2)
+    time_class = Time(hours=48)
     fts = Transfers(time_class)
     # a = fts.analyze_site(hostname="srm-cms.gridpp.rl.ac.uk")
-    a = fts.analyze_site(site_name="T1_US_FNAL", error="CHECKSUM")
+    dict_result = fts.analyze_site(site_name="T2_US_UCSD")  # , error="CHECKSUM")
     with open('all.json', 'w') as outfile:
-        json.dump(a, outfile)
+        json.dump(dict_result, outfile)
     print()
     error = "User timeout over"
+
+    with open('all.json') as outfile:
+        data = json.load(outfile)
+    print()
+    fts.results_to_csv(data)
+    # error = "User timeout over"
+
     # kibana_query = "data.vo:cms AND source_se:/.*storm.ifca.es.*/ AND data.reason:/.*\"{}\".*/".format(error)
     # kibana_query = "data.vo:cms  AND data.source_se:/.*gftp.t2.ucsd.edu.*/ AND data.file_state:FAILED " \
     #                "AND data.reason:/.*CHECKSUM.*|.*No such file.*/"

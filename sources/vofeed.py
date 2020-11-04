@@ -51,8 +51,8 @@ TEST_FIELD = "metadata.path:"
 
 
 class VOFeed(AbstractQueries, ABC):
-    def __init__(self, time_slot):
-        super().__init__(time_slot)
+    def __init__(self, _):
+        super().__init__(1)
         self.index_name = "monit_prod_cmssst*"
         self.index_id = "9475"
         self.field_id = "vofeed15min"
@@ -91,12 +91,23 @@ class VOFeed(AbstractQueries, ABC):
     def get_resource_filtered(self, flavour="", hostname="", site=""):
         query = {}
         if flavour:
-            query.update({"flavour": flavour})
+            query.update({"flavour": {'$regex': flavour}})
         if hostname:
-            query.update({"hostname": hostname})
+            query.update({"hostname": {'$regex': hostname}})
         if site:
-            query.update({"site": site})
+            query.update({"site": {'$regex': site}})
         return self.mongo.find_document(self.mongo.vofeed, query)
+
+    def get_list(self, field=""):
+        """
+
+        :param field: site|hostname|flavour
+        :return:
+        """
+        unique_list = []
+        if field:
+            unique_list = self.mongo.find_unique_fields(self.mongo.vofeed, field)
+        return unique_list
 
 
 class SiteCapacity(AbstractQueries, ABC):
@@ -124,10 +135,10 @@ class SiteCapacity(AbstractQueries, ABC):
 
 
 if __name__ == "__main__":
-    time = Time(days=1).time_slot
-    vofeed = VOFeed(time)
-    resources = vofeed.get_resource_filtered(site="", flavour="SRM")
-    print()
+    vofeed = VOFeed(0)
+    resources = vofeed.get_resource_filtered(site=".*T2.*", flavour="SRM")
+    # with open('resources.json', 'w') as outfile:
+    #     json.dump(resources, outfile)
     # capacity = SiteCapacity(time)
     # resources = capacity.get_attribute_capacity("T1_ES_PIC", "core_usable")
     print(resources)

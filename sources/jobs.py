@@ -1,5 +1,5 @@
 from query_utils import *
-
+from vofeed import VOFeed
 """
 data.CRAB_PostJobStatus  Running|failed|finished
 data.Type 	test|production|analysis
@@ -38,6 +38,8 @@ data.Site 	T2_US_MIT
 data.Tier 	T2
 data.Type 	test
 
+
+CRAB_Workflow --> Group number e.g. sciaba_crab_HC-95-T2_US_MIT --> 95
 ------------------------------------------------
 data.CRAB_PostJobStatus 	failed
 data.Status 	Completed
@@ -82,16 +84,30 @@ class Jobs(AbstractQueries, ABC):
         self.index_name = "monit_prod_condor_raw_metric*"
         self.index_id = "9668"
 
+    def detect_HC_outage(self, site_name="/.*.*/"):
+        kibana_query = "data.DESIRED_Sites:{} AND data.Type:test AND data.Status:Running".format(site_name)
+        response1 = self.get_direct_response(kibana_query=kibana_query)
+        sites_list = []
+        if site_name == "/.*.*/":
+            vofeed = VOFeed("")
+            sites = vofeed.get_list(field="site")
+            for site in sites:
+                kibana_query = "data.DESIRED_Sites:{} AND data.Type:test AND data.Status:Running".format(site)
+                response = self.get_direct_response(kibana_query=kibana_query)
+
+                if not response:
+                    sites_list.append(site)
+        print(sites_list)
+
 
 if __name__ == "__main__":
-    time = Time(days=2).time_slot
+    time = Time(hours=6)
     jobs = Jobs(time)
     kibana_query = "data.DESIRED_Sites:T2_US_MIT AND data.Type:test"
-    query_general = jobs.get_query(kibana_query=kibana_query)
+    jobs.detect_HC_outage()
 
-    response = jobs.get_response(query_general)
 
-    print(response)
+    # print(response)
 
 
 

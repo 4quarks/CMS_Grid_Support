@@ -30,6 +30,13 @@ class MongoDB:
         return [row for row in cursor]
 
     @staticmethod
+    def find_unique_fields(collection, unique_field):
+        """
+        list of unique fields []
+        """
+        return collection.distinct(unique_field)
+
+    @staticmethod
     def update_document(collection, find_by, dict_edit):
         """
         {'id':'147862'},{"$set":{"date_creation": "2020-07-15 00:00:00"}}

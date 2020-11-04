@@ -27,26 +27,34 @@ class SAMTest(AbstractQueries, ABC):
         self.index_name = "monit_prod_sam3_enr_*"
         self.index_id = "9677"
 
+    def get_details_test(self, hostname, metric_name=""):
+        kibana_query = "data.dst_hostname:{} AND data.status:CRITICAL AND data.metric_name:/.*{}.*/".format(hostname,
+                                                                                                            metric_name)
+        response = self.get_direct_response(kibana_query=kibana_query)
+
+        # all_logs = []
+        # for error in response:
+        #     description_error = error['data']['details']
+        #     all_logs.append(description_error)
+
+        return response
+
 
 if __name__ == "__main__":
-    time = Time(days=2).time_slot
+    time = Time(hours=2)
     sam = SAMTest(time)
 
-    kibana_query = "data.metric_name:\"org.cms.SRM-VOPut-/cms/Role=production\" AND data.status:CRITICAL AND  data.dst_experiment_site:T2_GR_Ioannina"
-    query_general = sam.get_query(kibana_query=kibana_query)
+    print(sam.get_details_test("se3.itep.ru"))
 
-    response = sam.get_response(query_general)
-
-    servers_with_error = []
-    for error in response:
-
-        description_error = error['data']['details']
-        import re
-        a = re.findall("error accessing (grid[0-9]+.physics.uoi.gr)", str(description_error))
-        if a and a[0] not in servers_with_error:
-            servers_with_error.append(a[0])
-
-        print(a)
+    # r = []
+    # for error in response:
+    #
+    #     description_error = error['data']['details']
+    #     # a = re.findall("error accessing (grid[0-9]+.physics.uoi.gr)", str(description_error))
+    #     a = re.findall("/store/test/xrootd/T1_IT_CNAF(.*).root", str(description_error))
+    #     if a and a[0] not in r:
+    #         r.append(a[0])
+    #         print(a[0])
     print()
 
 
