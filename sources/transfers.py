@@ -1,21 +1,26 @@
 from query_utils import *
 import spacy
 import pandas as pd
-import xlsxwriter
 
 NLP = spacy.load("en_core_web_lg")
 THRESHOLD = 0.99
 KEYWORDS_ERRORS = ['srm_authorization_failure', 'overwrite is not enabled', 'internal server error',
                    'no such file or directory', 'timeout of 360 seconds has been exceeded',
-                   'connection refused globus_xio', 'checksum',
+                   'connection refused globus_xio', 'checksum mismatch', 'system error in name',
                    'source and destination file size mismatch', 'protocol family not supported', 'permission_denied',
-                   'srm_putdone error on the surl', 'srm_get_turl error on the turl', 'no route to host',
+                   'srm_putdone error on the surl', 'no route to host',
                    "an end of file occurred", "stream ended before eod", 'handle not in the proper state',
                    'unable to get quota space', 'received block with unknown descriptor', 'no data available',
                    'file has no copy on tape and no diskcopies are accessible', 'valid credentials could not be found',
                    'a system call failed: connection timed out', 'operation timed out', 'user timeout over',
                    'idle timeout: closing control connection', 'system error in write into hdfs',
-                   'reports could not open connection to', 'closing xrootd file handle']
+                   'reports could not open connection to', 'closing xrootd file handle',
+                   'invalid request type for token', 'error reading token data header',
+                   'copy failed with mode 3rd push', 'unable to build the turl for the provided transfer protocol',
+                   'a system call failed: connection reset by peer', 'site busy: too many queued requests',
+                   'no fts server has updated the transfer status the last 900 seconds', "file is unavailable",
+                   'file recreation canceled since the file cannot be routed to tape',
+                   'checksum value required if mode is not end to end', 'login incorrect']
 
 """
 ######################## monit_prod_cms_rucio_enr*  ########################
@@ -114,8 +119,6 @@ class Transfers(AbstractQueries, ABC):
         keywords = [elem for elem in KEYWORDS_ERRORS if elem in string]
         if len(keywords) > 1:
             raise Exception('My error! {}, {}'.format(keywords, string))
-        if not keywords:
-            print()
         return keywords
 
     def value_in_list(self, value, list_values, strict_comparison=False):
@@ -226,7 +229,9 @@ class Transfers(AbstractQueries, ABC):
                             "timestamp_hr": timestamp_to_human_utc(timestamp)}
 
                 # Append Error data
-                if error_log:
+                in_blacklist = source in BLACKLIST_HOSTS or destination in BLACKLIST_HOSTS or \
+                               BLACKLIST_PFN in pfn_src or BLACKLIST_PFN in pfn_dst
+                if error_log and not in_blacklist:
                     min_error = deepcopy(min_data)
                     min_error.update({'se_from': source, 'se_to': destination})
                     grouped_by_error = self.group_data(grouped_by_error, min_error, error_log)
@@ -294,16 +299,13 @@ class Transfers(AbstractQueries, ABC):
         return count_repeated_elements_list(list(grouped_by_error.keys()))
 
     def get_data_from_to_host(self, hostname, direction="source_se", error=""):
-        kibana_query_ok = "data.vo:cms AND data.file_state:{} AND data.{}:/.*{}.*/ ".format("FINISHED", direction,
-                                                                                            hostname)
+
         kibana_query_failed = "data.vo:cms AND data.file_state:{} AND data.{}:/.*{}.*/ ".format("FAILED", direction,
                                                                                                 hostname)
 
         if error:
             kibana_query_failed += " AND data.reason:/.*\"{}\".*/".format(error)
-            response_failed = self.get_direct_response(kibana_query=kibana_query_failed, max_results=2000)
-        else:
-            response_failed = self.get_direct_response(kibana_query=kibana_query_failed, max_results=2000)
+        response_failed = self.get_direct_response(kibana_query=kibana_query_failed, max_results=2000)
             # response_ok = self.get_direct_response(kibana_query=kibana_query_ok, max_results=2000)
             # num_failed = len(response_failed)
             # num_ok = len(response_ok)
@@ -338,7 +340,6 @@ class Transfers(AbstractQueries, ABC):
     def results_to_csv(self, json_results):
         columns = ["timestamp", "timestamp_hr", "error", "se_from",
                    "se_to", "pfn_from", "pfn_to", "num_errors"]
-        csv_results = []
 
         for storage_element, se_value in json_results.items():
             file_name = '{}.xlsx'.format(storage_element.replace(".", "-"))
@@ -370,30 +371,25 @@ class Transfers(AbstractQueries, ABC):
                 # COLOR SHEET
                 worksheet = writer.sheets[direction]
                 column_id_error = "I1:I{}".format(str(len(list_errors) + 1))
-                worksheet.conditional_format(column_id_error, {'type': '3_color_scale'})  # ,
-                # 'min_color': "#878180",
-                # 'max_color': "#D4CCCB"
+                worksheet.conditional_format(column_id_error, {'type': '3_color_scale'})
                 column_id_group = "M1:M{}".format(str(len(list_groups) + 1))
                 worksheet.conditional_format(column_id_group, {'type': '3_color_scale'})
 
-                print()
             writer.save()
-        return csv_results
 
 
 if __name__ == "__main__":
-    time_class = Time(hours=48)
+    time_class = Time(hours=24)
     fts = Transfers(time_class)
     # a = fts.analyze_site(hostname="srm-cms.gridpp.rl.ac.uk")
-    dict_result = fts.analyze_site(site_name="T2_US_UCSD")  # , error="CHECKSUM")
+    BLACKLIST_HOSTS = ["se01.indiacms.res.in", "se3.itep.ru"]
+    BLACKLIST_PFN = "LoadTest"
+    dict_result = fts.analyze_site(site_name="T2_CH_CERN")  # , error="CHECKSUM")
     with open('all.json', 'w') as outfile:
         json.dump(dict_result, outfile)
-    print()
-    error = "User timeout over"
 
     with open('all.json') as outfile:
         data = json.load(outfile)
-    print()
     fts.results_to_csv(data)
     # error = "User timeout over"
 

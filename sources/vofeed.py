@@ -51,8 +51,8 @@ TEST_FIELD = "metadata.path:"
 
 
 class VOFeed(AbstractQueries, ABC):
-    def __init__(self, _):
-        super().__init__(1)
+    def __init__(self, time):
+        super().__init__(time)
         self.index_name = "monit_prod_cmssst*"
         self.index_id = "9475"
         self.field_id = "vofeed15min"
@@ -77,16 +77,18 @@ class VOFeed(AbstractQueries, ABC):
                 all_resources.append(resource)
         return all_resources
 
-    def get_site_resources(self, site_name="/.*.*/"):
-        kibana_query = TEST_FIELD + self.field_id + Cte.AND + self.field_site_name + site_name
+    def get_site_resources(self, site_name=""):
+        kibana_query = TEST_FIELD + self.field_id + Cte.AND + self.field_site_name + "/.*.*/".format(site_name)
         response = self.get_direct_response(kibana_query)
         resources_site = self.get_resources(response)
         return resources_site
 
-    def update_mongo_vofeed(self, site_name="/.*.*/"):
-
-        all_resources = self.get_site_resources(site_name)
-        self.mongo.insert_list_documents(self.mongo.vofeed, all_resources)
+    def update_mongo_vofeed(self, site_name=""):
+        if site_name:
+            all_resources = self.get_site_resources("/.*.*/".format(site_name))
+            self.mongo.insert_list_documents(self.mongo.vofeed, all_resources, delete_collection=True)
+        else:
+            raise Exception("Introduce site")
 
     def get_resource_filtered(self, flavour="", hostname="", site=""):
         query = {}
@@ -135,8 +137,9 @@ class SiteCapacity(AbstractQueries, ABC):
 
 
 if __name__ == "__main__":
-    vofeed = VOFeed(0)
-    resources = vofeed.get_resource_filtered(site=".*T2.*", flavour="SRM")
+    time = Time(hours=24)
+    vofeed = VOFeed(time)
+    resources = vofeed.update_mongo_vofeed()
     # with open('resources.json', 'w') as outfile:
     #     json.dump(resources, outfile)
     # capacity = SiteCapacity(time)

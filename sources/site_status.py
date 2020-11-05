@@ -1,6 +1,7 @@
 from query_utils import *
 from vofeed import VOFeed
 from sam3 import SAMTest
+
 """
 ---------------------------------------------------------------------------------
 sts15min
@@ -54,10 +55,9 @@ data.detail 	cmsrm-cream01.roma1.infn.it/CE (unknown)
 metadata.path 	sr1hour
 data.detail 	SAM: ok (15min evaluations: 4 ok, 0 warning, 0 error, 0 unknown, 0 downtime (0h0m)),
                 HC: ok (7 Success ...; 1 Success, no Chirp ExitCode ...),
-                FTS: ok (Links: 9/9 ok, 0/3 warning, 0/0 error, 1/1 unknown, 0/0 bad-endpoint; storage01.lcg.cscs.ch: ok/ok)
+                FTS: ok (Links: 9/9 ok, 0/3 warning, 0/0 error, 1/1 unknown, 0/0 bad-endpoint; storage01.cscs.ch: ok/ok)
 data.value 	0.75
 
-	
 -------------
 data.detail 	trn_timeout: 34 files, 0.0 GB [https://fts3.cern.ch:8449/fts3/ftsmon/#/job/3b664b36-070c-11eb...]
                 trn_error: 32 files, 0.0 GB [https://fts3.cern.ch:8449/fts3/ftsmon/#/job/d518140c-070d-11eb-a...]
@@ -107,8 +107,6 @@ class AbstractSiteStatus(AbstractQueries, ABC):
 
         self.sam3 = SAMTest(time_class)
 
-        print()
-
     def get_kibana_query(self, metric, status="", name="", flavour=""):
         kibana_query = "metadata.path:" + metric + self.str_freq
         if name:
@@ -139,50 +137,65 @@ class AbstractSiteStatus(AbstractQueries, ABC):
     def get_issues(self, response_all):
         status = "ok"
         list_errors = []
+        num_errors_row = 0
+
+        tests_evaluated = len(response_all)
 
         response_not_ok = [test for test in response_all if test["data"]["status"] != "ok"]
-
         num_not_ok_tests = int(len(response_not_ok))
-        tests_evaluated = len(response_all)
         num_ok_tests = tests_evaluated - num_not_ok_tests
-        percent = num_ok_tests / tests_evaluated
+        percent = (num_ok_tests / tests_evaluated) * 100
 
         # IN A ROW EVALUATION
         if num_ok_tests < NUM_MIN_OK:
             status_in_a_row = ""
             num_errors_row = tests_evaluated
             for num_error, test in enumerate(reversed(response_all)):
-                status = test["data"]["status"]
+                status_test = test["data"]["status"]
                 if not status_in_a_row:
-                    status_in_a_row = status
-                if status != status_in_a_row:
+                    status_in_a_row = status_test
+                if status_test != status_in_a_row:
                     num_errors_row = num_error
                     break
-            print("ERROR: {} oks, {} not oks --> out of {} --> {} oks".format(num_ok_tests, num_not_ok_tests,
-                                                                              tests_evaluated, percent))
-            print("{} {} in a row".format(num_errors_row, status_in_a_row))
 
             # DETAILED ERROR EVALUATION
+            issues = {}
             for test in response_not_ok:
+                status_failure = test["data"]["status"]
+                if status_failure not in issues.keys():
+                    issues.update({status_failure: 1})
+                else:
+                    issues[status_failure] += 1
                 issue = {}
                 # status, timestamp, timestamp_hr, details = self.get_common_data(test)
                 # issue.update(self.get_specific_data(test))
                 # Details
                 if "detail" in test["data"].keys():
                     details = test["data"]["detail"]
-                    metrics = details.split(",")
-                    for elem in metrics:
-                        if elem:
+                    if details:
+                        metrics = [elem for elem in details.split(",") if elem]
+                        for elem in metrics:
                             metric_error = elem.split("(")[0].strip()
-                            if metric_error not in list_errors and test["data"]["status"] == "error":
+                            if metric_error not in list_errors and status_failure == "error":
                                 list_errors.append(elem.split("(")[0].strip())
-                    print()
                     # issue.update({"detail": split_details})
                 # issue.update({"status": status, "timestamp": timestamp, "timestamp_hr": timestamp_hr})
                 # info_error.append(issue)
-        else:
-            print("OK")
-        return status, list_errors
+
+            status = max(issues, key=issues.get)
+        # else:
+        #     print("OK")
+
+        if list_errors:
+            print("{} \n {}".format(response_all[0]["data"]["name"], response_all[0]["metadata"]["path"]))
+
+            print("ERROR: {} not oks --> out of {}  --> {} %".format(len(list_errors), TOTAL_TESTS_EVALUATED, percent))
+            print("{} {} in a row".format(num_errors_row, status))
+            print("list errors ", list_errors)
+
+            print("*" * 20)
+
+        return status, list_errors, num_errors_row
 
     def remove_duplicate_responses(self, response_all):
         times = []
@@ -194,31 +207,33 @@ class AbstractSiteStatus(AbstractQueries, ABC):
                 clean_response.append(response)
         return clean_response
 
-    def get_status(self):
-        metrics = ["sam", "hc", "fts"]
-        print(self.site_name, "\n")
+    def get_status(self, metrics):
         for metric in metrics:
-            kibana_query_all = self.get_kibana_query(metric, name=self.site_name)
+            kibana_query_all = self.get_kibana_query(metric, name="/.*{}.*/".format(self.site_name))
             response_all = self.get_direct_response(kibana_query=kibana_query_all)
             clean_response = self.remove_duplicate_responses(response_all)
-            print(metric.upper())
-            issues_sam1 = self.get_issues(clean_response)
+            status, list_errors, num_errors_row = self.get_issues(clean_response)
 
     def get_issues_resources(self):
+        resources_evaluated = {}
         for resource in self.site_resources:
             hostname = resource["hostname"]
             flavour = resource["flavour"]
-            print("{} --> {}".format(flavour, hostname))
-            if "production" not in resource.keys():
+            site = resource["site"]
+            errors_dict = {}
+            status = "ok"
+            if "production" not in resource.keys() and site not in BLACKLIST_SITES:
                 if "CE" in flavour:
                     flavour = "CE"
                 if "XROOTD" in flavour:
                     flavour = "XRD"
                 kibana_query_all = self.get_kibana_query("sam", name=hostname, flavour=flavour)
                 response_all = self.get_direct_response(kibana_query=kibana_query_all)
-                status, list_errors = self.get_issues(response_all)
+                if not response_all:
+                    raise Exception("NO RESPONSE")
+                status, list_errors, num_errors_row = self.get_issues(response_all)
                 if status != "ok" and list_errors:
-                    errors_dict = {}
+
                     if status == "error":
                         for metric_with_error in list_errors:
                             logs = self.sam3.get_details_test(hostname=hostname, metric_name=metric_with_error)
@@ -230,50 +245,44 @@ class AbstractSiteStatus(AbstractQueries, ABC):
                                     times_saved.append(timestamp)
                                     clean_logs.append(log)
                             errors_dict.update({metric_with_error: clean_logs})
-                print()
-            else:
-                print("Test endpoint")
+            # else:
+            #     print("Test endpoint")
+            resources_evaluated.update(
+                {"hostname": hostname, "flavour": flavour, "site": site, "status": status, "errors_dict": errors_dict})
+        return resources_evaluated
 
-            print("*" * 20)
 
-    # def get_resources_not_running_tests(self):
-    #     flavours = ["CE", "SRM", "XRD"]
-    #     sites = {}
-    #     for flavour in flavours:
-    #         kibana_query_all = self.get_kibana_query(flavour=flavour, status="unknown")
-    #         response_all = self.get_direct_response(kibana_query=kibana_query_all, max_results=2000)
-    #         for element in response_all:
-    #             data_site = self.vofeed.get_resource_filtered(flavour=flavour, hostname=element["data"]["name"])
-    #             site_name = data_site[0]["site"]
-            #     sites.update({site_name:})
-            # print(site)
+class TestsAbstract:
+    def __init__(self, metric, specific_fields=None):
+        self.metric = metric
+        self.specific_fields = specific_fields
+
+
+class Tests:
+    SAM = TestsAbstract(metric="sam")
+    HammerCloud = TestsAbstract(metric="hc")
+    FTS = TestsAbstract(metric="fts", specific_fields=["quality"])
+    SiteReadiness = TestsAbstract(metric="sr", specific_fields=["value"])
+    Downtime = TestsAbstract(metric="down", specific_fields=["duration"])
+    SiteStatus = TestsAbstract(metric="sts", specific_fields=["prod_status", "crab_status", "manual_life",
+                                                              "manual_prod", "manual_crab"])
 
 
 # class SAM(AbstractSiteStatus):
 #     def __init__(self, str_freq, time_slot, site_name=""):
 #         super().__init__(str_freq, time_slot, site_name=site_name, metric="sam")
-#
-#
 # class HammerCloud(AbstractSiteStatus):
 #     def __init__(self, str_freq, time_slot, site_name=""):
 #         super().__init__(str_freq, time_slot, site_name=site_name, metric="hc")
-#
-#
 # class FTS(AbstractSiteStatus):
 #     def __init__(self, str_freq, time_slot, site_name=""):
 #         super().__init__(str_freq, time_slot, site_name=site_name, metric="fts", specific_fields=["quality"])
-#
-#
 # class SiteReadiness(AbstractSiteStatus):
 #     def __init__(self, site_name, str_freq, time_slot):
 #         super().__init__(str_freq, time_slot, site_name=site_name, metric="sr", specific_fields=["value"])
-#
-#
 # class Downtime(AbstractSiteStatus):
 #     def __init__(self, str_freq, time_slot, site_name=""):
 #         super().__init__(str_freq, time_slot, site_name=site_name, metric="down", specific_fields=["duration"])
-#
-#
 # class SiteStatus(AbstractSiteStatus):
 #     def __init__(self, str_freq, time_slot, site_name=""):
 #         specific_fields = ["prod_status", "crab_status", "manual_life", "manual_prod", "manual_crab"]
@@ -281,8 +290,9 @@ class AbstractSiteStatus(AbstractQueries, ABC):
 
 
 if __name__ == "__main__":
+    BLACKLIST_SITES = ["T2_PL_Warsaw", "T2_RU_ITEP"]
     time = Time(hours=HOURS_RANGE)
-    sam = AbstractSiteStatus(time, site_name="T2_RU_ITEP")
-    # sam.get_status()
-    sam.get_issues_resources()
-
+    sam = AbstractSiteStatus(time, site_name="T2")
+    sam.get_status(metrics=[Tests.SAM.metric, Tests.HammerCloud.metric, Tests.SiteReadiness.metric])
+    # errors = sam.get_issues_resources()
+    print()
