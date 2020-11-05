@@ -80,13 +80,6 @@ data.RemoveReason:/"Removed due to wall clock limit"/
 "GlobalPool periodic cleanup" --> data.ExitCode:143
 
 """
-NUM_ERRORS_ROW = 8
-HOURS_RANGE = 5
-NUM_TESTS_PER_HOUR = 4
-TOTAL_TESTS_EVALUATED = HOURS_RANGE * NUM_TESTS_PER_HOUR
-PERCENT_MIN_OK = 0.7  # 20 --> 14
-
-NUM_MIN_OK = int(HOURS_RANGE * NUM_TESTS_PER_HOUR * PERCENT_MIN_OK)
 
 
 class AbstractSiteStatus(AbstractQueries, ABC):
@@ -147,7 +140,7 @@ class AbstractSiteStatus(AbstractQueries, ABC):
         percent = (num_ok_tests / tests_evaluated) * 100
 
         # IN A ROW EVALUATION
-        if num_ok_tests < NUM_MIN_OK:
+        if num_ok_tests < Cte.NUM_MIN_OK:
             status_in_a_row = ""
             num_errors_row = tests_evaluated
             for num_error, test in enumerate(reversed(response_all)):
@@ -189,7 +182,7 @@ class AbstractSiteStatus(AbstractQueries, ABC):
         if list_errors:
             print("{} \n {}".format(response_all[0]["data"]["name"], response_all[0]["metadata"]["path"]))
 
-            print("ERROR: {} not oks --> out of {}  --> {} %".format(len(list_errors), TOTAL_TESTS_EVALUATED, percent))
+            print("ERROR: {} not oks --> out of {}  --> {} %".format(len(list_errors), Cte.TOTAL_TESTS_EVALUATED, percent))
             print("{} {} in a row".format(num_errors_row, status))
             print("list errors ", list_errors)
 
@@ -268,30 +261,9 @@ class Tests:
                                                               "manual_prod", "manual_crab"])
 
 
-# class SAM(AbstractSiteStatus):
-#     def __init__(self, str_freq, time_slot, site_name=""):
-#         super().__init__(str_freq, time_slot, site_name=site_name, metric="sam")
-# class HammerCloud(AbstractSiteStatus):
-#     def __init__(self, str_freq, time_slot, site_name=""):
-#         super().__init__(str_freq, time_slot, site_name=site_name, metric="hc")
-# class FTS(AbstractSiteStatus):
-#     def __init__(self, str_freq, time_slot, site_name=""):
-#         super().__init__(str_freq, time_slot, site_name=site_name, metric="fts", specific_fields=["quality"])
-# class SiteReadiness(AbstractSiteStatus):
-#     def __init__(self, site_name, str_freq, time_slot):
-#         super().__init__(str_freq, time_slot, site_name=site_name, metric="sr", specific_fields=["value"])
-# class Downtime(AbstractSiteStatus):
-#     def __init__(self, str_freq, time_slot, site_name=""):
-#         super().__init__(str_freq, time_slot, site_name=site_name, metric="down", specific_fields=["duration"])
-# class SiteStatus(AbstractSiteStatus):
-#     def __init__(self, str_freq, time_slot, site_name=""):
-#         specific_fields = ["prod_status", "crab_status", "manual_life", "manual_prod", "manual_crab"]
-#         super().__init__(str_freq, time_slot, site_name=site_name, metric="sts", specific_fields=specific_fields)
-
-
 if __name__ == "__main__":
     BLACKLIST_SITES = ["T2_PL_Warsaw", "T2_RU_ITEP"]
-    time = Time(hours=HOURS_RANGE)
+    time = Time(hours=Cte.HOURS_RANGE)
     sam = AbstractSiteStatus(time, site_name="T2")
     sam.get_status(metrics=[Tests.SAM.metric, Tests.HammerCloud.metric, Tests.SiteReadiness.metric])
     # errors = sam.get_issues_resources()
