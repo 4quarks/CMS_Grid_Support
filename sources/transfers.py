@@ -91,9 +91,6 @@ class Transfers(AbstractQueries, ABC):
         self.index_id = "9233"
         self.mongo = MongoDB()
 
-    def create_str_link(self, origin, destination):
-        return str(origin) + '__' + destination
-
     def preprocess_string_nlp(self, string):
         return string.lower().strip()
 
@@ -111,7 +108,6 @@ class Transfers(AbstractQueries, ABC):
         in_list = False
         similar_error = error_log
         keyword = ""
-
         # DIRECT COMPARISON
         if strict_comparison:
             if error_log in previous_errors:
@@ -121,49 +117,81 @@ class Transfers(AbstractQueries, ABC):
             clean_error = self.preprocess_string_nlp(error_log)
             nlp_error = NLP(clean_error)
             keyword_error = self.get_keyword(clean_error)
+            keyword = keyword_error
             # Check if the current error can be grouped with any other previous error
             for previous_error in previous_errors:
                 if previous_error:
                     clean_previous_error = self.preprocess_string_nlp(previous_error)
-                    nlp_previous_error = NLP(clean_previous_error)  # Finding the similarity
-                    score = nlp_error.similarity(nlp_previous_error)
                     keywords_value_list = self.get_keyword(clean_previous_error)
 
-                    # IF THEY ARE SIMILAR (NLP) OR THEY CONTAIN THE SAME KEYBOARD --> SAME ISSUE
-                    if score > Cte.THRESHOLD_NLP or keyword_error == keywords_value_list:
+                    if keyword_error == keywords_value_list:
                         in_list = True
                         similar_error = previous_error
                         break
+
+                    nlp_previous_error = NLP(clean_previous_error)  # Finding the similarity
+                    score = nlp_error.similarity(nlp_previous_error)
+
+                    # IF THEY ARE SIMILAR (NLP) OR THEY CONTAIN THE SAME KEYBOARD --> SAME ISSUE
+                    if score > Cte.THRESHOLD_NLP:
+                        in_list = True
+                        similar_error = previous_error
+                        break
+
         return in_list, similar_error, keyword
 
-    def group_data(self, grouped_by_error, min_dict, error_log):
-        error_in_list, similar_error, keyword = self.value_in_list(error_log, list(grouped_by_error.keys()))
+    def is_blacklisted(self, src_url, dest_url):
+        """
+        Check if the pfn contains blacklisted elements
+        :param src_url: 'gsiftp://eoscmsftp.cern.ch//eos/cms/store/temp/user/cc/.../out_offline_Photons_230.root'
+        :param dest_url:
+        :return:
+        """
+        black_pfn = [black_pfn for black_pfn in BLACKLIST_PFN if black_pfn in src_url or black_pfn in dest_url]
+        return black_pfn
 
-        ############ CHOOSE REFERENCE ############
-        if not keyword:
-            # The reference is the error log
-            print('different error: ', similar_error)
-            error_ref = similar_error
-        else:
-            # The reference is the keyword
-            error_ref = keyword
+    def group_data(self, grouped_by_error, error):
+        error_data = deepcopy(error["data"])
+        ############ DETAILED DATA OF THE ERROR ############
+        error_log = error_data[Cte.REF_ERROR_LOG]
+        src_url = error_data[Cte.REF_PFN_SRC]
+        dst_url = error_data[Cte.REF_PFN_DST]
+        timestamp_hr = timestamp_to_human_utc(error_data[Cte.REF_TIMESTAMP])
 
-        if not error_in_list:
-            # If the error was not grouped --> add
-            grouped_by_error.update({error_ref: [min_dict]})
-        else:
-            # If the error match with another --> count repetition
-            matched_element = False
-            # EXACT SAME ERROR REPEATED --> num_errors + 1
-            for idx, element in enumerate(grouped_by_error[error_ref]):
-                # SAME ERROR & SAME PFN --> SAME ISSUE
-                if element['pfn_from'] == min_dict['pfn_from'] and element['pfn_to'] == min_dict['pfn_to']:
-                    grouped_by_error[error_ref][idx]['num_errors'] = grouped_by_error[error_ref][idx]['num_errors'] + 1
-                    matched_element = True
-                    break
+        ############ ADD EXTRA DATA ############
+        error_data.update({Cte.REF_NUM_ERRORS: 1, Cte.REF_TIMESTAMP_HR: timestamp_hr})
+        # Get users
+        user = self.get_user(error_log)
+        if user:
+            error_data.update({Cte.REF_USER: user})
 
-            if not matched_element:
-                grouped_by_error[error_ref].append(min_dict)
+        ############ AVOID ERRORS THAT ARE BLACKLISTED ############
+        in_blacklist = self.is_blacklisted(src_url, dst_url)
+        if error_log and not in_blacklist:
+            error_in_list, similar_error, keyword = self.value_in_list(error_log, list(grouped_by_error.keys()))
+            ############ CHOOSE REFERENCE ############
+            if not keyword:
+                # The reference is the error log
+                print('different error: ', similar_error)
+                error_ref = similar_error
+            else:
+                # The reference is the keyword
+                error_ref = keyword
+            if not error_in_list:
+                # If the error was not grouped --> add
+                grouped_by_error.update({error_ref: [error_data]})
+            else:
+                # If the error match with another --> count repetition
+                matched_element = False
+                # EXACT SAME ERROR REPEATED --> num_errors + 1
+                for idx, element in enumerate(grouped_by_error[error_ref]):
+                    # SAME ERROR & SAME PFN --> SAME ISSUE
+                    if element[Cte.REF_PFN_SRC] == src_url and element[Cte.REF_PFN_DST] == dst_url:
+                        grouped_by_error[error_ref][idx][Cte.REF_NUM_ERRORS] += 1
+                        matched_element = True
+                        break
+                if not matched_element:
+                    grouped_by_error[error_ref].append(error_data)
         return grouped_by_error
 
     def get_user(self, error_log):
@@ -193,83 +221,13 @@ class Transfers(AbstractQueries, ABC):
             ]
         """
         grouped_by_error = {}
-        list_users = []
+        ############ ITERATE OVER ALL ERRORS ############
         for error in response_clean:
             # Extract useful data
             if "reason" in error["data"].keys():
-                error_log = error["data"]["reason"].strip("")
-
-                # Get users
-                user = self.get_user(error_log)
-                if user:
-                    list_users.append(user)
-
-                # Source
-                pfn_src = error["data"]["src_url"].strip("")
-                source = error["data"]["source_se"].split('://')[1].strip("")
-                # Destination
-                pfn_dst = error["data"]["dst_url"]
-                destination = error["data"]["dest_se"].split('://')[1].strip("")
-                timestamp = error["data"]["timestamp"]
-
-                # LFN
-                lfn, _ = get_lfn_and_short_pfn(pfn_src)
-
-                ############ DETAILED DATA OF THE ERROR ############
-                min_data = {'pfn_from': pfn_src, 'pfn_to': pfn_dst, 'num_errors': 1,
-                            'error': error_log, "timestamp": timestamp, 'lfn': lfn,
-                            "timestamp_hr": timestamp_to_human_utc(timestamp)}
-
                 ############ GROUP THE ERROR ############
-                in_blacklist = source in BLACKLIST_HOSTS or destination in BLACKLIST_HOSTS or \
-                               BLACKLIST_PFN in pfn_src or BLACKLIST_PFN in pfn_dst
-                if error_log and not in_blacklist:
-                    min_error = deepcopy(min_data)
-                    min_error.update({'se_from': source, 'se_to': destination})
-                    grouped_by_error = self.group_data(grouped_by_error, min_error, error_log)
-
+                grouped_by_error = self.group_data(grouped_by_error, error)
         return grouped_by_error
-
-    def get_lfn_per_error(self, grouped_by_error):
-        """
-        Get LFNs with the error:
-        :param response_grouped: output --> get_grouped_errors
-        :return: dict with all errors and each lfn with the number of occurrences.
-        e.g.
-        {"Source and destination file size mismatch":
-            {
-                "/store/PhEDEx_LoadTest07_4/LoadTest07_CERN_196": 1,
-                "/store/PhEDEx_LoadTest07/LoadTest07_Prod_Caltech/LoadTest07_Caltech_4E": 6,
-                ...
-            },
-            ...
-        }
-        """
-        all_errors = []
-        all_list_lfn = []
-        for error, list_min_data in grouped_by_error.items():
-            list_lfn = []
-            for min_data in list_min_data:
-                lfn, _ = get_lfn_and_short_pfn(min_data['pfn_from'])
-                list_lfn.append(lfn)
-                all_list_lfn.append(lfn)
-            all_errors.append({error: unique_elem_list(list_lfn)})
-        return all_errors, unique_elem_list(all_list_lfn)
-
-    def get_error_per_type(self, grouped_by_error):
-        """
-        Count the number of errors
-
-        :param response_grouped: output --> get_grouped_errors
-        :return: dict with each error reason and the number of occurrences
-        e.g.
-        {
-            "DESTINATION [22] Source and destination file size mismatch": 1,
-            "DESTINATION [17] Destination file exists and overwrite is not enabled": 3,
-            ...
-        }
-        """
-        return count_repeated_elements_list(list(grouped_by_error.keys()))
 
     def get_data_from_to_host(self, hostname, direction="", error=""):
         """
@@ -297,7 +255,7 @@ class Transfers(AbstractQueries, ABC):
 
     def analyze_site(self, site_name="", hostname="", error=""):
         """
-
+        Get json with all the errors grouped by: host, destination/origin, type of error
         :param site_name:
         :param hostname:
         :param error:
@@ -305,14 +263,15 @@ class Transfers(AbstractQueries, ABC):
         """
         all_data = {}
         if not hostname and site_name:
+            ############ GET SRM ELEMENTS OF THE SITE ############
             list_site_info = self.mongo.find_document(self.mongo.vofeed, {"site": site_name, "flavour": "SRM"})
             if list_site_info:
                 hosts_name = [info["hostname"] for info in list_site_info if info]
-                # ITERATE OVER ALL SRMs OF THE SITE
+                ############  ITERATE OVER ALL SRMs HOSTS ############
                 for hostname in hosts_name:
                     data_host = {}
-                    # ORIGIN AND DESTINATION
-                    for direction in ["source_se", "dest_se"]:
+                    ############ GET DATA ORIGIN AND DESTINATION ############
+                    for direction in [Cte.REF_SE_SRC, Cte.REF_SE_DST]:
                         time.sleep(0.1)
                         direction_data = self.get_data_from_to_host(hostname, direction=direction, error=error)
                         if direction_data:
@@ -325,8 +284,8 @@ class Transfers(AbstractQueries, ABC):
         :param json_results:
         :return:
         """
-        columns = ["timestamp", "timestamp_hr", "error", "se_from",
-                   "se_to", "pfn_from", "pfn_to", "num_errors"]
+        columns = [Cte.REF_TIMESTAMP, Cte.REF_TIMESTAMP_HR, Cte.REF_ERROR_LOG,
+                   Cte.REF_SE_SRC, Cte.REF_SE_DST, Cte.REF_PFN_SRC, Cte.REF_PFN_DST, Cte.REF_NUM_ERRORS]
 
         for storage_element, se_value in json_results.items():
             file_name = '{}.xlsx'.format(storage_element.replace(".", "-"))
@@ -334,7 +293,7 @@ class Transfers(AbstractQueries, ABC):
             for direction, direction_value in se_value.items():
                 list_errors, list_groups = [], []
                 group_id = 1
-                for error_key, error_value in direction_value["grouped_by_error"].items():
+                for error_key, error_value in direction_value.items():
                     failed_transfers = 0
                     for single_error in error_value:
                         values_columns = [single_error[elem] for elem in columns]
@@ -342,7 +301,7 @@ class Transfers(AbstractQueries, ABC):
 
                         list_errors.append(values_columns)
 
-                        failed_transfers += single_error["num_errors"]
+                        failed_transfers += single_error[Cte.REF_NUM_ERRORS]
                     list_groups.append([group_id, error_key, len(error_value), failed_transfers])
                     group_id += 1
 
@@ -369,8 +328,7 @@ if __name__ == "__main__":
     time_class = Time(hours=24)
     fts = Transfers(time_class)
     # a = fts.analyze_site(hostname="srm-cms.gridpp.rl.ac.uk")
-    BLACKLIST_HOSTS = ["se01.indiacms.res.in", "se3.itep.ru"]
-    BLACKLIST_PFN = "LoadTest"
+    BLACKLIST_PFN = ["se01.indiacms.res.in", "se3.itep.ru", "LoadTest"]
     dict_result = fts.analyze_site(site_name="T2_CH_CERN")  # , error="CHECKSUM")
     with open('all.json', 'w') as outfile:
         json.dump(dict_result, outfile)

@@ -72,6 +72,14 @@ def get_str_lucene_query(index_es, min_time, max_time, query, max_results):
     return final_query
 
 
+class ClassFromDict:
+    def __init__(self, **entries):
+        self.__dict__.update(entries)
+
+    def to_dict(self):
+        return self.__dict__
+
+
 def get_lfn_and_short_pfn(raw_pfn):
     lfn, reduced_pfn = "", ""
     if "/store" in raw_pfn:

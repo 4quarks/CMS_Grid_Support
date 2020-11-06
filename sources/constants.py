@@ -13,7 +13,7 @@ class Constants:
                        'source and destination file size mismatch', 'protocol family not supported',
                        'permission_denied', 'srm_putdone error on the surl', 'no route to host',
                        "an end of file occurred", "stream ended before eod", 'handle not in the proper state',
-                       'unable to get quota space', 'received block with unknown descriptor', 'no data available',
+                       'disk quota exceeded', 'received block with unknown descriptor', 'no data available',
                        'file has no copy on tape and no diskcopies are accessible',
                        'valid credentials could not be found',
                        'a system call failed: connection timed out', 'operation timed out', 'user timeout over',
@@ -25,7 +25,17 @@ class Constants:
                        'no fts server has updated the transfer status the last 900 seconds', "file is unavailable",
                        'file recreation canceled since the file cannot be routed to tape',
                        'checksum value required if mode is not end to end', 'login incorrect',
-                       'unable to read replica']
+                       'unable to read replica', 'srm_file_busy', 'general problem: problem while connected']
+
+    REF_PFN_SRC = "src_url"
+    REF_PFN_DST = "dst_url"
+    REF_SE_SRC = "source_se"
+    REF_SE_DST = "dest_se"
+    REF_ERROR_LOG = "reason"
+    REF_NUM_ERRORS = "num_errors"
+    REF_TIMESTAMP = "timestamp"
+    REF_TIMESTAMP_HR = "timestamp_hr"
+    REF_USER = "user"
 
     # SITE STATUS
     NUM_ERRORS_ROW = 8
