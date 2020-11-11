@@ -132,6 +132,8 @@ class AbstractQueries(ABC):
         {"size": 500, "query": {"bool": {"filter": [{"range": {"metadata.timestamp": {"gte": 1602634230000, ....
         """
         clean_str_query = ""
+        if max_results > 10000:
+            raise Exception("max_results has to be <= 10.000")
         if kibana_query:
             raw_query = kibana_query
             clean_str_query = get_str_lucene_query(self.index_name,

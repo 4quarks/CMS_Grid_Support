@@ -131,6 +131,7 @@ class AbstractSiteStatus(AbstractQueries, ABC):
         status = "ok"
         list_errors = []
         num_errors_row = 0
+        issues = {}
 
         tests_evaluated = len(response_all)
 
@@ -152,7 +153,6 @@ class AbstractSiteStatus(AbstractQueries, ABC):
                     break
 
             # DETAILED ERROR EVALUATION
-            issues = {}
             for test in response_not_ok:
                 status_failure = test["data"]["status"]
                 if status_failure not in issues.keys():
@@ -169,26 +169,15 @@ class AbstractSiteStatus(AbstractQueries, ABC):
                         metrics = [elem for elem in details.split(",") if elem]
                         for elem in metrics:
                             metric_error = elem.split("(")[0].strip()
-                            if metric_error not in list_errors and status_failure == "error":
+                            if metric_error not in list_errors and status_failure != "ok":
                                 list_errors.append(elem.split("(")[0].strip())
                     # issue.update({"detail": split_details})
                 # issue.update({"status": status, "timestamp": timestamp, "timestamp_hr": timestamp_hr})
                 # info_error.append(issue)
+            if list_errors:
+                status = max(issues, key=issues.get)
 
-            status = max(issues, key=issues.get)
-        # else:
-        #     print("OK")
-
-        if list_errors:
-            print("{} \n {}".format(response_all[0]["data"]["name"], response_all[0]["metadata"]["path"]))
-
-            print("ERROR: {} not oks --> out of {}  --> {} %".format(len(list_errors), Cte.TOTAL_TESTS_EVALUATED, percent))
-            print("{} {} in a row".format(num_errors_row, status))
-            print("list errors ", list_errors)
-
-            print("*" * 20)
-
-        return status, list_errors, num_errors_row
+        return status, list_errors, num_errors_row, num_not_ok_tests
 
     def remove_duplicate_responses(self, response_all):
         times = []
@@ -203,7 +192,7 @@ class AbstractSiteStatus(AbstractQueries, ABC):
     def get_status(self, metrics):
         for metric in metrics:
             kibana_query_all = self.get_kibana_query(metric, name="/.*{}.*/".format(self.site_name))
-            response_all = self.get_direct_response(kibana_query=kibana_query_all)
+            response_all = self.get_direct_response(kibana_query=kibana_query_all, max_results=10000)
             clean_response = self.remove_duplicate_responses(response_all)
             status, list_errors, num_errors_row = self.get_issues(clean_response)
 
@@ -224,8 +213,14 @@ class AbstractSiteStatus(AbstractQueries, ABC):
                 response_all = self.get_direct_response(kibana_query=kibana_query_all)
                 if not response_all:
                     raise Exception("NO RESPONSE")
-                status, list_errors, num_errors_row = self.get_issues(response_all)
+                status, list_errors, num_errors_row, num_not_ok_tests = self.get_issues(response_all)
                 if status != "ok" and list_errors:
+                    print("{}: {} {} \n {}".format(site, hostname, flavour,
+                                                response_all[0]["metadata"]["path"]))
+                    print("ERROR: {} not oks --> out of {}".format(num_not_ok_tests, Cte.TOTAL_TESTS_EVALUATED))
+                    print("{} {} in a row".format(num_errors_row, status))
+                    print("list errors ", list_errors)
+                    print("*" * 20)
 
                     if status == "error":
                         for metric_with_error in list_errors:
@@ -265,6 +260,6 @@ if __name__ == "__main__":
     BLACKLIST_SITES = ["T2_PL_Warsaw", "T2_RU_ITEP"]
     time = Time(hours=Cte.HOURS_RANGE)
     sam = AbstractSiteStatus(time, site_name="T2")
-    sam.get_status(metrics=[Tests.SAM.metric, Tests.HammerCloud.metric, Tests.SiteReadiness.metric])
-    # errors = sam.get_issues_resources()
+    # sam.get_status(metrics=[Tests.SAM.metric, Tests.HammerCloud.metric])
+    errors = sam.get_issues_resources()
     print()

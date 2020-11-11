@@ -157,13 +157,12 @@ class Transfers(AbstractQueries, ABC):
         src_url = error_data[Cte.REF_PFN_SRC]
         dst_url = error_data[Cte.REF_PFN_DST]
         timestamp_hr = timestamp_to_human_utc(error_data[Cte.REF_TIMESTAMP])
+        # Clean se
+        error_data[Cte.REF_SE_SRC] = error_data[Cte.REF_SE_SRC].split("/")[-1]
+        error_data[Cte.REF_SE_DST] = error_data[Cte.REF_SE_DST].split("/")[-1]
 
         ############ ADD EXTRA DATA ############
         error_data.update({Cte.REF_NUM_ERRORS: 1, Cte.REF_TIMESTAMP_HR: timestamp_hr})
-        # Get users
-        user = self.get_user(error_log)
-        if user:
-            error_data.update({Cte.REF_USER: user})
 
         ############ AVOID ERRORS THAT ARE BLACKLISTED ############
         in_blacklist = self.is_blacklisted(src_url, dst_url)
@@ -194,19 +193,16 @@ class Transfers(AbstractQueries, ABC):
                     grouped_by_error[error_ref].append(error_data)
         return grouped_by_error
 
-    def get_user(self, error_log):
-        """
-        :param error_log: Disk quota exceeded
-        return: the list of the users with this issue
-        """
-        users = []
-        raw_users = re.findall("/user/(.*)/", str(error_log))
-        for user in raw_users:
-            clean_user = user.split("/")[0].strip("")
-            users.append(clean_user)
-        return unique_elem_list(users)
+    def get_user(self, url_pfn):
+        user = ""
+        raw_users = re.findall("/user/(.*)/", str(url_pfn))
+        if raw_users:
+            user = raw_users[0].split("/")[0].strip("")
+        if len(raw_users) > 2:
+            raise Exception("MULTIPLE USERS ON PFN")
+        return user
 
-    def get_grouped_errors(self, response_clean):
+    def group_by_error(self, response_clean):
         """
         Get all errors and the source/destination PFNs
 
@@ -249,7 +245,7 @@ class Transfers(AbstractQueries, ABC):
         response_failed = self.get_direct_response(kibana_query=kibana_query_failed, max_results=2000)
 
         ############ GROUP DATA BY ERRORS ############
-        grouped_by_error = self.get_grouped_errors(response_failed)
+        grouped_by_error = self.group_by_error(response_failed)
 
         return grouped_by_error
 
@@ -279,46 +275,118 @@ class Transfers(AbstractQueries, ABC):
                     all_data.update({hostname: data_host})
         return all_data
 
+    def get_column_id(self, num_rows, num_columns_ahead=0, num_rows_ahead=0):
+        letter_column = chr(64 + num_columns_ahead)
+        structure_id = "{}{}:{}{}".format(letter_column, num_rows_ahead + 1, letter_column,
+                                          num_rows + num_rows_ahead + 1)
+        return structure_id
+
+    def get_sub_table(self, dict_grouped_by_id, list_elements):
+        list_group = []
+        for group_id, data in dict_grouped_by_id.items():
+            new_row = []
+            dict_data = dict((i, data.count(i)) for i in data)
+            if dict_data:
+                for element_value in list_elements:
+                    if element_value in dict_data.keys():
+                        new_row.append(dict_data[element_value])
+                    else:
+                        new_row.append(None)
+                list_group.append([group_id] + new_row)
+        return list_group
+
+
     def results_to_csv(self, json_results):
         """
         :param json_results:
         :return:
         """
+        SEPARATION_COLUMNS = 2
+        SEPARATION_ROWS = 4
         columns = [Cte.REF_TIMESTAMP, Cte.REF_TIMESTAMP_HR, Cte.REF_ERROR_LOG,
-                   Cte.REF_SE_SRC, Cte.REF_SE_DST, Cte.REF_PFN_SRC, Cte.REF_PFN_DST, Cte.REF_NUM_ERRORS]
-
+                   Cte.REF_SE_SRC, Cte.REF_SE_DST, Cte.REF_PFN_SRC, Cte.REF_PFN_DST, Cte.REF_NUM_ERRORS, "job_id",
+                   "file_id"]
+        ############  ITERATE OVER ALL SRMs HOSTS ############
         for storage_element, se_value in json_results.items():
-            file_name = '{}.xlsx'.format(storage_element.replace(".", "-"))
+            file_name = '{}_{}.xlsx'.format(round(time.time()), storage_element.replace(".", "-"))
             writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
+            ############ GET DATA ORIGIN AND DESTINATION ############
             for direction, direction_value in se_value.items():
-                list_errors, list_groups = [], []
+                list_errors, list_groups, list_users, list_other_endpoint = [], [], [], []
                 group_id = 1
+                users, endpoints = {}, {}
+                other_direction = [elem for elem in se_value.keys() if elem != direction][0]
+                ############  ITERATE OVER ALL ERROR GROUPS ############
                 for error_key, error_value in direction_value.items():
+                    users.update({group_id: []})
+                    endpoints.update({group_id: []})
                     failed_transfers = 0
+                    ############  ITERATE OVER ALL ERRORS ############
                     for single_error in error_value:
+
+                        # ADD USER IN LIST
+                        user = self.get_user(single_error[Cte.REF_PFN_DST])
+                        if user:
+                            users[group_id] += [user]*single_error[Cte.REF_NUM_ERRORS]
+                        if user not in list_users:
+                            list_users.append(user)
+
+                        # ADD ENDPOINT IN LIST
+                        other_endpoint = single_error[other_direction]
+                        endpoints[group_id] += [other_endpoint] * single_error[Cte.REF_NUM_ERRORS]
+                        if other_endpoint not in list_other_endpoint:
+                            list_other_endpoint.append(other_endpoint)
+
+                        # ADD ALL THE ERROR INFORMATION
                         values_columns = [single_error[elem] for elem in columns]
+                        values_columns.append(user)
                         values_columns.append(group_id)
-
+                        # Row errors table
                         list_errors.append(values_columns)
-
+                        # Count total of failed transfers for each group
                         failed_transfers += single_error[Cte.REF_NUM_ERRORS]
+
+                    # Row table (legend) group errors
                     list_groups.append([group_id, error_key, len(error_value), failed_transfers])
                     group_id += 1
 
                 # DF ERRORS
-                df = pd.DataFrame(list_errors, columns=columns + ["group_id"])
+                columns_errors = columns + ["user", "group_id"]
+                num_columns_error = len(columns_errors)
+                df = pd.DataFrame(list_errors, columns=columns_errors)
                 df.to_excel(writer, sheet_name=direction, index=False)
+                column_id_error = self.get_column_id(len(list_errors), num_columns_error)
 
                 # DF LEGEND GROUPS
-                df_group = pd.DataFrame(list_groups, columns=["group_id", "error_ref", "num_diff_errors",
-                                                              "num_failed_transfers"])
-                df_group.to_excel(writer, sheet_name=direction, startcol=12, index=False)
+                columns_groups = ["group_id", "error_ref", "num_diff_errors", "num_failed_transfers"]
+                start_column = num_columns_error + SEPARATION_COLUMNS
+                df_group = pd.DataFrame(list_groups, columns=columns_groups)
+                df_group.to_excel(writer, sheet_name=direction, startcol=start_column, index=False)
+                column_id_group = self.get_column_id(len(list_groups), start_column + 1)
+
+                # DF USERS
+                list_group_users = self.get_sub_table(users, list_users)
+                columns_users = ["group_id"] + list_users
+                start_column = num_columns_error + SEPARATION_COLUMNS
+                start_row_users = len(list_groups) + SEPARATION_ROWS
+                if list_group_users:
+                    df_users = pd.DataFrame(list_group_users, columns=columns_users)
+                    df_users.to_excel(writer, sheet_name=direction, startcol=start_column, startrow=start_row_users,
+                                      index=False)
+
+                # DF ENDPOINTS
+                list_group_endpoints = self.get_sub_table(endpoints, list_other_endpoint)
+                columns_endpoints = ["group_id"] + list_other_endpoint
+                start_column = num_columns_error + SEPARATION_COLUMNS
+                start_row = start_row_users + len(list_group_users) + SEPARATION_ROWS
+                if list_group_endpoints:
+                    df_endpoint = pd.DataFrame(list_group_endpoints, columns=columns_endpoints)
+                    df_endpoint.to_excel(writer, sheet_name=direction, startcol=start_column, startrow=start_row,
+                                         index=False)
 
                 # COLOR SHEET
                 worksheet = writer.sheets[direction]
-                column_id_error = "I1:I{}".format(str(len(list_errors) + 1))
                 worksheet.conditional_format(column_id_error, {'type': '3_color_scale'})
-                column_id_group = "M1:M{}".format(str(len(list_groups) + 1))
                 worksheet.conditional_format(column_id_group, {'type': '3_color_scale'})
 
             writer.save()
@@ -328,10 +396,10 @@ if __name__ == "__main__":
     time_class = Time(hours=24)
     fts = Transfers(time_class)
     # a = fts.analyze_site(hostname="srm-cms.gridpp.rl.ac.uk")
-    BLACKLIST_PFN = ["se01.indiacms.res.in", "se3.itep.ru", "LoadTest"]
-    dict_result = fts.analyze_site(site_name="T2_CH_CERN")  # , error="CHECKSUM")
-    with open('all.json', 'w') as outfile:
-        json.dump(dict_result, outfile)
+    BLACKLIST_PFN = ["se3.itep.ru", "LoadTest", "se01.indiacms.res.in"]
+    # dict_result = fts.analyze_site(site_name="T2_US_UCSD")  # , error="CHECKSUM")
+    # with open('all.json', 'w') as outfile:
+    #     json.dump(dict_result, outfile)
 
     with open('all.json') as outfile:
         data = json.load(outfile)
