@@ -29,12 +29,15 @@ class Constants:
                        'checksum value required if mode is not end to end', 'login incorrect',
                        'unable to read replica', 'srm_file_busy', 'general problem: problem while connected',
                        'system error in connect: connection timed out', 'invalid request descriptor',
-                       'failed to deliver poolmgrselectwritepoolmsg', 'a system call failed: broken pipe']
+                       'failed to deliver poolmgrselectwritepoolmsg', 'a system call failed: broken pipe',
+                       'no free space on storage area', 'commands denied']
 
     REF_PFN_SRC = "src_url"
     REF_PFN_DST = "dst_url"
     REF_SE_SRC = "source_se"
     REF_SE_DST = "dest_se"
+    REF_LFN_SRC = "src_lfn"
+    REF_LFN_DST = "dst_lfn"
     REF_ERROR_LOG = "reason"
     REF_NUM_ERRORS = "num_errors"
     REF_TIMESTAMP = "timestamp"

@@ -1,6 +1,7 @@
 from query_utils import *
 import spacy
 import pandas as pd
+import logging
 
 NLP = spacy.load("en_core_web_lg")
 
@@ -99,7 +100,8 @@ class Transfers(AbstractQueries, ABC):
         keywords = [elem for elem in Cte.KEYWORDS_ERRORS if elem in string]
         # We should not have more than 2 keywords in one error
         if len(keywords) > 1:
-            raise Exception('My error! {}, {}'.format(keywords, string))
+            print('ERROR! {}, {}'.format(keywords, string))
+            keywords_value = keywords[1]
         if keywords:
             keywords_value = keywords[0]
         return keywords_value
@@ -150,23 +152,29 @@ class Transfers(AbstractQueries, ABC):
         black_pfn = [black_pfn for black_pfn in BLACKLIST_PFN if black_pfn in src_url or black_pfn in dest_url]
         return black_pfn
 
-    def group_data(self, grouped_by_error, error):
+    def group_data(self, grouped_by_error, error, errors_interested=""):
         error_data = deepcopy(error["data"])
         ############ DETAILED DATA OF THE ERROR ############
         error_log = error_data[Cte.REF_ERROR_LOG]
         src_url = error_data[Cte.REF_PFN_SRC]
         dst_url = error_data[Cte.REF_PFN_DST]
-        timestamp_hr = timestamp_to_human_utc(error_data[Cte.REF_TIMESTAMP])
-        # Clean se
-        error_data[Cte.REF_SE_SRC] = error_data[Cte.REF_SE_SRC].split("/")[-1]
-        error_data[Cte.REF_SE_DST] = error_data[Cte.REF_SE_DST].split("/")[-1]
-
-        ############ ADD EXTRA DATA ############
-        error_data.update({Cte.REF_NUM_ERRORS: 1, Cte.REF_TIMESTAMP_HR: timestamp_hr})
 
         ############ AVOID ERRORS THAT ARE BLACKLISTED ############
         in_blacklist = self.is_blacklisted(src_url, dst_url)
-        if error_log and not in_blacklist:
+        is_interesting = not errors_interested or (errors_interested and errors_interested in error_log)
+        if error_log and not in_blacklist and is_interesting:
+            ############ ADD EXTRA DATA ############
+            src_lfn, _ = get_lfn_and_short_pfn(src_url)
+            dst_lfn, _ = get_lfn_and_short_pfn(dst_url)
+            timestamp_hr = timestamp_to_human_utc(error_data[Cte.REF_TIMESTAMP])
+
+            error_data.update({Cte.REF_NUM_ERRORS: 1, Cte.REF_TIMESTAMP_HR: timestamp_hr,
+                               Cte.REF_LFN_SRC: src_lfn, Cte.REF_LFN_DST: dst_lfn})
+            # Clean se
+            error_data[Cte.REF_SE_SRC] = error_data[Cte.REF_SE_SRC].split("/")[-1]
+            error_data[Cte.REF_SE_DST] = error_data[Cte.REF_SE_DST].split("/")[-1]
+
+            ########### DETECT KEYWORDS ###########
             error_in_list, similar_error, keyword = self.value_in_list(error_log, list(grouped_by_error.keys()))
             ############ CHOOSE REFERENCE ############
             if not keyword:
@@ -198,69 +206,43 @@ class Transfers(AbstractQueries, ABC):
         raw_users = re.findall("/user/(.*)/", str(url_pfn))
         if raw_users:
             user = raw_users[0].split("/")[0].strip("")
+            user = user.split(".")[0]  # e.g. gbakas.9c1d054d2d278c14ddc228476ff7559c10393d8d
         if len(raw_users) > 2:
             raise Exception("MULTIPLE USERS ON PFN")
         return user
 
-    def group_by_error(self, response_clean):
-        """
-        Get all errors and the source/destination PFNs
-
-        :param response_clean: output --> get_response
-        :return: dict with each error found and the list of pfns (from/to) and lfns
-        e.g.
-        {"Source and destination file size mismatch":
-            [
-                {"dst": "gsiftp://se.cis.gov.pl:2811//dpm/cis.gov.pl/home/cms",
-                "src": "srm://srm-cms.cern.ch:8443/srm/managerv2?SFN=/castor/cern.ch/cms",
-                "lfn": "/store/PhEDEx_LoadTest07_4/LoadTest07_CERN_196/.../file.root"}, ...
-            ]
-        """
-        grouped_by_error = {}
-        ############ ITERATE OVER ALL ERRORS ############
-        for error in response_clean:
-            # Extract useful data
-            if "reason" in error["data"].keys():
-                ############ GROUP THE ERROR ############
-                grouped_by_error = self.group_data(grouped_by_error, error)
-        return grouped_by_error
-
-    def get_data_from_to_host(self, hostname, direction="", error=""):
+    def build_query_get_response(self, hostname, direction="", filter_error_kibana=""):
         """
 
         :param hostname: name of the host to analyze e.g. eoscmsftp.cern.ch
         :param direction: source_se or dest_se
-        :param error: keyword of the error to find e.g. "No such file"
-        :return: json with all the information of the errors
+        :param filter_error_kibana: keyword of the error to find e.g. "No such file"
+        :return:
         """
-
         ############ CONSTRUCT THE QUERY ############
         kibana_query_failed = "data.vo:cms AND data.file_state:{} AND data.{}:/.*{}.*/ ".format("FAILED", direction,
                                                                                                 hostname)
         # If an error is specified --> add filter on the query
-        if error:
-            kibana_query_failed += " AND data.reason:/.*\"{}\".*/".format(error)
+        if filter_error_kibana:
+            kibana_query_failed += " AND data.reason:/.*\"{}\".*/".format(filter_error_kibana)
 
         ############ QUERY TO ELASTICSEARCH ############
         response_failed = self.get_direct_response(kibana_query=kibana_query_failed, max_results=2000)
+        return response_failed
 
-        ############ GROUP DATA BY ERRORS ############
-        grouped_by_error = self.group_by_error(response_failed)
-
-        return grouped_by_error
-
-    def analyze_site(self, site_name="", hostname="", error=""):
+    def analyze_site(self, site_name="", hostname="", filter_error_kibana="", interested_error=""):
         """
         Get json with all the errors grouped by: host, destination/origin, type of error
-        :param site_name:
-        :param hostname:
-        :param error:
-        :return:
         """
         all_data = {}
-        if not hostname and site_name:
+        if not hostname and site_name or hostname:
             ############ GET SRM ELEMENTS OF THE SITE ############
-            list_site_info = self.mongo.find_document(self.mongo.vofeed, {"site": site_name, "flavour": "SRM"})
+            mongo_query = {"flavour": "SRM"}
+            if site_name:
+                mongo_query.update({"site": site_name})
+            if hostname:
+                mongo_query.update({"hostname": hostname})
+            list_site_info = self.mongo.find_document(self.mongo.vofeed, mongo_query)
             if list_site_info:
                 hosts_name = [info["hostname"] for info in list_site_info if info]
                 ############  ITERATE OVER ALL SRMs HOSTS ############
@@ -269,9 +251,19 @@ class Transfers(AbstractQueries, ABC):
                     ############ GET DATA ORIGIN AND DESTINATION ############
                     for direction in [Cte.REF_SE_SRC, Cte.REF_SE_DST]:
                         time.sleep(0.1)
-                        direction_data = self.get_data_from_to_host(hostname, direction=direction, error=error)
-                        if direction_data:
-                            data_host.update({direction: direction_data})
+                        response_kibana = self.build_query_get_response(hostname, direction=direction,
+                                                                        filter_error_kibana=filter_error_kibana)
+                        ############ GROUP DATA BY ERRORS ############
+                        grouped_by_error = {}
+                        ############ ITERATE OVER ALL ERRORS ############
+                        for error in response_kibana:
+                            # Extract useful data
+                            if "reason" in error["data"].keys():
+                                ############ GROUP THE ERROR ############
+                                grouped_by_error = self.group_data(grouped_by_error, error,
+                                                                   errors_interested=interested_error)
+                        if grouped_by_error:
+                            data_host.update({direction: grouped_by_error})
                     all_data.update({hostname: data_host})
         return all_data
 
@@ -295,8 +287,7 @@ class Transfers(AbstractQueries, ABC):
                 list_group.append([group_id] + new_row)
         return list_group
 
-
-    def results_to_csv(self, json_results):
+    def results_to_csv(self, json_results, write_lfns=False):
         """
         :param json_results:
         :return:
@@ -304,32 +295,50 @@ class Transfers(AbstractQueries, ABC):
         SEPARATION_COLUMNS = 2
         SEPARATION_ROWS = 4
         columns = [Cte.REF_TIMESTAMP, Cte.REF_TIMESTAMP_HR, Cte.REF_ERROR_LOG,
-                   Cte.REF_SE_SRC, Cte.REF_SE_DST, Cte.REF_PFN_SRC, Cte.REF_PFN_DST, Cte.REF_NUM_ERRORS, "job_id",
-                   "file_id"]
+                   Cte.REF_SE_SRC, Cte.REF_SE_DST, Cte.REF_PFN_SRC, Cte.REF_PFN_DST, Cte.REF_LFN_SRC, Cte.REF_LFN_DST,
+                   Cte.REF_NUM_ERRORS, "job_id", "file_id"]
         ############  ITERATE OVER ALL SRMs HOSTS ############
         for storage_element, se_value in json_results.items():
-            file_name = '{}_{}.xlsx'.format(round(time.time()), storage_element.replace(".", "-"))
-            writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
+            time_analysis = round(time.time())
+            host_analysis = storage_element.replace(".", "-")
+            file_name = '{}_{}'.format(time_analysis, host_analysis)
+            writer = pd.ExcelWriter(file_name + ".xlsx", engine='xlsxwriter')
             ############ GET DATA ORIGIN AND DESTINATION ############
             for direction, direction_value in se_value.items():
                 list_errors, list_groups, list_users, list_other_endpoint = [], [], [], []
                 group_id = 1
-                users, endpoints = {}, {}
-                other_direction = [elem for elem in se_value.keys() if elem != direction][0]
+                users, endpoints, lfns = {}, {}, {}
+                if "s" == direction[0]:
+                    other_direction = Cte.REF_SE_DST
+                    other_url_direction = Cte.REF_PFN_DST
+                    other_lfn = Cte.REF_LFN_DST
+                    same_url_direction = Cte.REF_PFN_SRC
+                    same_lfn = Cte.REF_LFN_SRC
+
+                else:
+                    other_direction = Cte.REF_SE_SRC
+                    other_url_direction = Cte.REF_PFN_SRC
+                    same_url_direction = Cte.REF_PFN_DST
+                    other_lfn = Cte.REF_LFN_SRC
+                    same_lfn = Cte.REF_LFN_DST
+
                 ############  ITERATE OVER ALL ERROR GROUPS ############
                 for error_key, error_value in direction_value.items():
                     users.update({group_id: []})
                     endpoints.update({group_id: []})
+                    lfns.update({error_key: []})
                     failed_transfers = 0
                     ############  ITERATE OVER ALL ERRORS ############
                     for single_error in error_value:
-
                         # ADD USER IN LIST
-                        user = self.get_user(single_error[Cte.REF_PFN_DST])
-                        if user:
-                            users[group_id] += [user]*single_error[Cte.REF_NUM_ERRORS]
-                        if user not in list_users:
-                            list_users.append(user)
+                        user_site = self.get_user(single_error[same_url_direction])
+                        user_other = self.get_user(single_error[other_url_direction])
+                        if user_site:
+                            users[group_id] += [user_site] * single_error[Cte.REF_NUM_ERRORS]
+                            if user_other and user_site != user_other:
+                                logging.error("Different users {} vs {}".format(user_site, user_other))
+                            if user_site not in list_users:
+                                list_users.append(user_site)
 
                         # ADD ENDPOINT IN LIST
                         other_endpoint = single_error[other_direction]
@@ -337,9 +346,13 @@ class Transfers(AbstractQueries, ABC):
                         if other_endpoint not in list_other_endpoint:
                             list_other_endpoint.append(other_endpoint)
 
+                        # ADD LIST LFNs
+                        if write_lfns and single_error[same_lfn] and single_error[same_lfn] not in lfns[error_key]:
+                            lfns[error_key].append(single_error[same_lfn])
+
                         # ADD ALL THE ERROR INFORMATION
                         values_columns = [single_error[elem] for elem in columns]
-                        values_columns.append(user)
+                        values_columns.append(user_site)
                         values_columns.append(group_id)
                         # Row errors table
                         list_errors.append(values_columns)
@@ -349,6 +362,21 @@ class Transfers(AbstractQueries, ABC):
                     # Row table (legend) group errors
                     list_groups.append([group_id, error_key, len(error_value), failed_transfers])
                     group_id += 1
+
+                # WRITE TXT WITH LFNs
+                if write_lfns:
+                    text = ""
+                    for error, list_lfns in lfns.items():
+                        text += "*"*30 + "\n"
+                        text += error.capitalize() + "\n"
+                        text += "*" * 30 + "\n"
+                        for lfn in list_lfns:
+                            text += lfn + "\n"
+
+                    lfns_file_name = file_name + "_LFNs_{}".format(direction)
+                    f = open(lfns_file_name + ".txt", "a")
+                    f.write(text)
+                    f.close()
 
                 # DF ERRORS
                 columns_errors = columns + ["user", "group_id"]
@@ -393,17 +421,17 @@ class Transfers(AbstractQueries, ABC):
 
 
 if __name__ == "__main__":
-    time_class = Time(hours=24)
+    time_class = Time(hours=4)
     fts = Transfers(time_class)
     # a = fts.analyze_site(hostname="srm-cms.gridpp.rl.ac.uk")
     BLACKLIST_PFN = ["se3.itep.ru", "LoadTest", "se01.indiacms.res.in"]
-    # dict_result = fts.analyze_site(site_name="T2_US_UCSD")  # , error="CHECKSUM")
-    # with open('all.json', 'w') as outfile:
-    #     json.dump(dict_result, outfile)
+    dict_result = fts.analyze_site(site_name="T2_CH_CERN") #, interested_error="SRM_INVALID_REQUEST")  # , error="CHECKSUM")
+    with open('all.json', 'w') as outfile:
+        json.dump(dict_result, outfile)
 
     with open('all.json') as outfile:
         data = json.load(outfile)
-    fts.results_to_csv(data)
+    fts.results_to_csv(data, write_lfns=False)
     # error = "User timeout over"
 
     # kibana_query = "data.vo:cms AND source_se:/.*storm.ifca.es.*/ AND data.reason:/.*\"{}\".*/".format(error)
