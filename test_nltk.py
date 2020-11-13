@@ -1,4 +1,5 @@
 
+"""
 from sklearn.feature_extraction.text import TfidfVectorizer
 corpus = ["[5] TRANSFER CHECKSUM MISMATCH Source and destination checksums do not match 6752692d != 8a426f8e",
            "[2] DESTINATION CHECKSUM HTTP 404 : File not found",
@@ -18,10 +19,10 @@ vect = TfidfVectorizer(min_df=0.2, stop_words="english")
 tfidf = vect.fit_transform(corpus)
 pairwise_similarity = tfidf * tfidf.T
 array_pairwise_similarity = pairwise_similarity.toarray()
-
-import numpy as np
-
-np.fill_diagonal(array_pairwise_similarity, np.nan)
+"""
+# import numpy as np
+#
+# np.fill_diagonal(array_pairwise_similarity, np.nan)
 
 # input_doc = "[5] TRANSFER CHECKSUM MISMATCH USER_DEFINE and SRC checksums are different. ecdd6369 != a60305af"
 # input_idx = corpus.index(input_doc)

@@ -71,6 +71,9 @@ class CteFTS(Constants):
     INDEX_ES = "monit_prod_fts_raw_*"
     INDEX_ES_ID = "9233"
 
+    # INDEX_ES = "monit_prod_cms_rucio_enr*"
+    # INDEX_ES_ID = "9732"
+
 
 class CteSAM(Constants):
     KEYWORDS_ERRORS = ["no servers are available to read the file", "ncat: connection refused",

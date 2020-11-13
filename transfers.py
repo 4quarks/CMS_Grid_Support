@@ -1,6 +1,6 @@
 import logging
 from constants import CteFTS as CteFTS
-import json, time
+import time
 from copy import deepcopy
 from abc import ABC
 import re
@@ -222,17 +222,14 @@ class Transfers(AbstractQueries, ABC):
         f.write(text)
         f.close()
 
-    def results_to_csv(self, json_results, write_lfns=False):
-        """
-        :param json_results:
-        :return:
-        """
+    def results_to_csv(self, dict_results, write_lfns=False):
+
         columns = [CteFTS.REF_TIMESTAMP, CteFTS.REF_TIMESTAMP_HR, CteFTS.REF_LOG,
                    CteFTS.REF_SE_SRC, CteFTS.REF_SE_DST, CteFTS.REF_PFN_SRC, CteFTS.REF_PFN_DST, CteFTS.REF_LFN_SRC,
                    CteFTS.REF_LFN_DST, CteFTS.REF_NUM_ERRORS, CteFTS.REF_JOB_ID, CteFTS.REF_FILE_ID]
 
         ############  ITERATE OVER ALL SRMs HOSTS ############
-        for storage_element, se_value in json_results.items():
+        for storage_element, se_value in dict_results.items():
             time_analysis = round(time.time())
             host_analysis = storage_element.replace(".", "-")
             file_name = '{}_{}'.format(time_analysis, host_analysis)
@@ -349,12 +346,7 @@ if __name__ == "__main__":
     fts = Transfers(time_class)
     BLACKLIST_PFN = ["se3.itep.ru", "LoadTest"]
     dict_result = fts.analyze_site(site="T1_UK_RAL")
-    with open('all.json', 'w') as outfile:
-        json.dump(dict_result, outfile)
-
-    with open('all.json') as outfile:
-        data = json.load(outfile)
-    fts.results_to_csv(data, write_lfns=False)
+    fts.results_to_csv(dict_result, write_lfns=True)
 
 
 

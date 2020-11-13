@@ -142,11 +142,7 @@ class SiteCapacity(AbstractQueries, ABC):
 if __name__ == "__main__":
     time = Time(hours=24)
     vofeed = VOFeed(time)
-    resources = vofeed.update_mongo_vofeed()
-    # with open('resources.json', 'w') as outfile:
-    #     json.dump(resources, outfile)
-    # capacity = SiteCapacity(time)
-    # resources = capacity.get_attribute_capacity("T1_ES_PIC", "core_usable")
-    print(resources)
-    "SRM, T2_CH_CERN --> hostname"
-    "hostname --> SRM, T2_CH_CERN"
+
+    vofeed.update_mongo_vofeed()
+
+
