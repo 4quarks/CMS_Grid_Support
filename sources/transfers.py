@@ -1,9 +1,12 @@
-from query_utils import *
-import spacy
-import pandas as pd
 import logging
-
-NLP = spacy.load("en_core_web_lg")
+from constants import CteFTS as CteFTS
+import json, time
+from copy import deepcopy
+from abc import ABC
+import re
+from mongotools import MongoDB
+import pandas as pd
+from query_utils import AbstractQueries, get_lfn_and_short_pfn, group_data, Time
 
 """
 ######################## monit_prod_cms_rucio_enr*  ########################
@@ -17,6 +20,7 @@ data.activity 	Production Output|User Subscriptions
 data.bytes 	111,809,924
 data.file_size 	111,809,924
 data.checksum_adler 	c88b8895
+data.file_id 	2867026540
 
 -------------------- SUBMITTED -------------------------------
 data.event_type     transfer-submitted
@@ -69,14 +73,14 @@ class Status:
     finished = "FINISHED"
 
 def join_attribute_and_expression(self, attr, expression):
-    return Cte.AND + attr + Cte.EXPRESSION.format(Cte.INCLUDED.format(expression))
+    return CteFTS.AND + attr + CteFTS.EXPRESSION.format(CteFTS.INCLUDED.format(expression))
 
 def get_query(self, dst_url="", dst_protocol="", src_url="", src_protocol="", status="", reason=""):
     raw_query = "data.vo:cms"
     if dst_url:
         raw_query += self.join_attribute_and_expression(self.attr_destination, dst_url)
     if status:
-        raw_query += Cte.AND + self.attr_status + status
+        raw_query += CteFTS.AND + self.attr_status + status
 
     clean_str_query = get_str_lucene_query(self.index['name'], self.time_slot[0], self.time_slot[1], raw_query)
     return clean_str_query
@@ -88,59 +92,18 @@ https://monit-kibana.cern.ch/kibana/goto/31129642d019649a5fe8ee3c816677e6
 class Transfers(AbstractQueries, ABC):
     def __init__(self, time_class):
         super().__init__(time_class)
-        self.index_name = "monit_prod_fts_raw_*"
-        self.index_id = "9233"
+        self.index_name = CteFTS.INDEX_ES
+        self.index_id = CteFTS.INDEX_ES_ID
         self.mongo = MongoDB()
 
-    def preprocess_string_nlp(self, string):
-        return string.lower().strip()
-
-    def get_keyword(self, string):
-        keywords_value = None
-        keywords = [elem for elem in Cte.KEYWORDS_ERRORS if elem in string]
-        # We should not have more than 2 keywords in one error
-        if len(keywords) > 1:
-            print('ERROR! {}, {}'.format(keywords, string))
-            keywords_value = keywords[1]
-        if keywords:
-            keywords_value = keywords[0]
-        return keywords_value
-
-    def value_in_list(self, error_log, previous_errors, strict_comparison=False):
-        in_list = False
-        similar_error = error_log
-        keyword = ""
-        # DIRECT COMPARISON
-        if strict_comparison:
-            if error_log in previous_errors:
-                in_list = True
-        # USE NLP TO MATCH KEYBOARDS AND OTHER ERRORS
-        else:
-            clean_error = self.preprocess_string_nlp(error_log)
-            nlp_error = NLP(clean_error)
-            keyword_error = self.get_keyword(clean_error)
-            keyword = keyword_error
-            # Check if the current error can be grouped with any other previous error
-            for previous_error in previous_errors:
-                if previous_error:
-                    clean_previous_error = self.preprocess_string_nlp(previous_error)
-                    keywords_value_list = self.get_keyword(clean_previous_error)
-
-                    if keyword_error == keywords_value_list:
-                        in_list = True
-                        similar_error = previous_error
-                        break
-
-                    nlp_previous_error = NLP(clean_previous_error)  # Finding the similarity
-                    score = nlp_error.similarity(nlp_previous_error)
-
-                    # IF THEY ARE SIMILAR (NLP) OR THEY CONTAIN THE SAME KEYBOARD --> SAME ISSUE
-                    if score > Cte.THRESHOLD_NLP:
-                        in_list = True
-                        similar_error = previous_error
-                        break
-
-        return in_list, similar_error, keyword
+    def get_mongo_query(self, site="", hostname=""):
+        ############ GET SRM ELEMENTS OF THE SITE ############
+        mongo_query = {CteFTS.REF_FLAVOUR: "SRM"}
+        if site:
+            mongo_query.update({CteFTS.REF_SITE: site})
+        if hostname:
+            mongo_query.update({CteFTS.REF_HOST: hostname})
+        return mongo_query
 
     def is_blacklisted(self, src_url, dest_url):
         """
@@ -152,54 +115,7 @@ class Transfers(AbstractQueries, ABC):
         black_pfn = [black_pfn for black_pfn in BLACKLIST_PFN if black_pfn in src_url or black_pfn in dest_url]
         return black_pfn
 
-    def group_data(self, grouped_by_error, error, errors_interested=""):
-        error_data = deepcopy(error["data"])
-        ############ DETAILED DATA OF THE ERROR ############
-        error_log = error_data[Cte.REF_ERROR_LOG]
-        src_url = error_data[Cte.REF_PFN_SRC]
-        dst_url = error_data[Cte.REF_PFN_DST]
 
-        ############ AVOID ERRORS THAT ARE BLACKLISTED ############
-        in_blacklist = self.is_blacklisted(src_url, dst_url)
-        is_interesting = not errors_interested or (errors_interested and errors_interested in error_log)
-        if error_log and not in_blacklist and is_interesting:
-            ############ ADD EXTRA DATA ############
-            src_lfn, _ = get_lfn_and_short_pfn(src_url)
-            dst_lfn, _ = get_lfn_and_short_pfn(dst_url)
-            timestamp_hr = timestamp_to_human_utc(error_data[Cte.REF_TIMESTAMP])
-
-            error_data.update({Cte.REF_NUM_ERRORS: 1, Cte.REF_TIMESTAMP_HR: timestamp_hr,
-                               Cte.REF_LFN_SRC: src_lfn, Cte.REF_LFN_DST: dst_lfn})
-            # Clean se
-            error_data[Cte.REF_SE_SRC] = error_data[Cte.REF_SE_SRC].split("/")[-1]
-            error_data[Cte.REF_SE_DST] = error_data[Cte.REF_SE_DST].split("/")[-1]
-
-            ########### DETECT KEYWORDS ###########
-            error_in_list, similar_error, keyword = self.value_in_list(error_log, list(grouped_by_error.keys()))
-            ############ CHOOSE REFERENCE ############
-            if not keyword:
-                # The reference is the error log
-                print('different error: ', similar_error)
-                error_ref = similar_error
-            else:
-                # The reference is the keyword
-                error_ref = keyword
-            if not error_in_list:
-                # If the error was not grouped --> add
-                grouped_by_error.update({error_ref: [error_data]})
-            else:
-                # If the error match with another --> count repetition
-                matched_element = False
-                # EXACT SAME ERROR REPEATED --> num_errors + 1
-                for idx, element in enumerate(grouped_by_error[error_ref]):
-                    # SAME ERROR & SAME PFN --> SAME ISSUE
-                    if element[Cte.REF_PFN_SRC] == src_url and element[Cte.REF_PFN_DST] == dst_url:
-                        grouped_by_error[error_ref][idx][Cte.REF_NUM_ERRORS] += 1
-                        matched_element = True
-                        break
-                if not matched_element:
-                    grouped_by_error[error_ref].append(error_data)
-        return grouped_by_error
 
     def get_user(self, url_pfn):
         user = ""
@@ -224,47 +140,53 @@ class Transfers(AbstractQueries, ABC):
                                                                                                 hostname)
         # If an error is specified --> add filter on the query
         if filter_error_kibana:
-            kibana_query_failed += " AND data.reason:/.*\"{}\".*/".format(filter_error_kibana)
+            kibana_query_failed += " AND data.{}:/.*\"{}\".*/".format(CteFTS.REF_LOG, filter_error_kibana)
 
         ############ QUERY TO ELASTICSEARCH ############
         response_failed = self.get_direct_response(kibana_query=kibana_query_failed, max_results=2000)
         return response_failed
 
-    def analyze_site(self, site_name="", hostname="", filter_error_kibana="", interested_error=""):
+    def analyze_site(self, site="", hostname="", filter_error_kibana=""):
         """
         Get json with all the errors grouped by: host, destination/origin, type of error
         """
         all_data = {}
-        if not hostname and site_name or hostname:
-            ############ GET SRM ELEMENTS OF THE SITE ############
-            mongo_query = {"flavour": "SRM"}
-            if site_name:
-                mongo_query.update({"site": site_name})
-            if hostname:
-                mongo_query.update({"hostname": hostname})
-            list_site_info = self.mongo.find_document(self.mongo.vofeed, mongo_query)
-            if list_site_info:
-                hosts_name = [info["hostname"] for info in list_site_info if info]
-                ############  ITERATE OVER ALL SRMs HOSTS ############
-                for hostname in hosts_name:
-                    data_host = {}
-                    ############ GET DATA ORIGIN AND DESTINATION ############
-                    for direction in [Cte.REF_SE_SRC, Cte.REF_SE_DST]:
-                        time.sleep(0.1)
-                        response_kibana = self.build_query_get_response(hostname, direction=direction,
-                                                                        filter_error_kibana=filter_error_kibana)
-                        ############ GROUP DATA BY ERRORS ############
-                        grouped_by_error = {}
-                        ############ ITERATE OVER ALL ERRORS ############
-                        for error in response_kibana:
-                            # Extract useful data
-                            if "reason" in error["data"].keys():
-                                ############ GROUP THE ERROR ############
-                                grouped_by_error = self.group_data(grouped_by_error, error,
-                                                                   errors_interested=interested_error)
-                        if grouped_by_error:
-                            data_host.update({direction: grouped_by_error})
-                    all_data.update({hostname: data_host})
+        mongo_query = self.get_mongo_query(site, hostname)
+        list_site_info = self.mongo.find_document(self.mongo.vofeed, mongo_query)
+        if list_site_info:
+            hosts_name = [info[CteFTS.REF_HOST] for info in list_site_info if info]
+            ############  ITERATE OVER ALL SRMs HOSTS ############
+            for hostname in hosts_name:
+                data_host = {}
+                ############ GET DATA ORIGIN AND DESTINATION ############
+                for direction in [CteFTS.REF_SE_SRC, CteFTS.REF_SE_DST]:
+                    time.sleep(0.1)
+                    response_kibana = self.build_query_get_response(hostname, direction=direction,
+                                                                    filter_error_kibana=filter_error_kibana)
+                    ############ GROUP DATA BY ERRORS ############
+                    grouped_by_error = {}
+                    ############ ITERATE OVER ALL ERRORS ############
+                    for error in response_kibana:
+                        error_data = deepcopy(error[CteFTS.REF_DATA])
+                        src_url = error_data[CteFTS.REF_PFN_SRC]
+                        dst_url = error_data[CteFTS.REF_PFN_DST]
+                        ############ AVOID ERRORS THAT ARE BLACKLISTED ############ç
+                        in_blacklist = self.is_blacklisted(src_url, dst_url)
+                        # Extract useful data
+                        if CteFTS.REF_LOG in error_data.keys() and not in_blacklist:
+                            ############ ADD EXTRA DATA ############
+                            src_lfn, _ = get_lfn_and_short_pfn(src_url)
+                            dst_lfn, _ = get_lfn_and_short_pfn(dst_url)
+                            error_data.update({CteFTS.REF_LFN_SRC: src_lfn, CteFTS.REF_LFN_DST: dst_lfn})
+                            # Clean se
+                            error_data[CteFTS.REF_SE_SRC] = error_data[CteFTS.REF_SE_SRC].split("/")[-1]
+                            error_data[CteFTS.REF_SE_DST] = error_data[CteFTS.REF_SE_DST].split("/")[-1]
+                            ############ GROUP THE ERROR ############
+                            grouped_by_error = group_data(grouped_by_error, error_data,
+                                                          [CteFTS.REF_PFN_SRC, CteFTS.REF_PFN_DST], CteFTS)
+                    if grouped_by_error:
+                        data_host.update({direction: grouped_by_error})
+                all_data.update({hostname: data_host})
         return all_data
 
     def get_column_id(self, num_rows, num_columns_ahead=0, num_rows_ahead=0):
@@ -287,16 +209,28 @@ class Transfers(AbstractQueries, ABC):
                 list_group.append([group_id] + new_row)
         return list_group
 
+    def write_lfn_txt(self, lfns_file_name, lfns):
+        text = ""
+        for error, list_lfns in lfns.items():
+            text += "*" * 30 + "\n"
+            text += error.capitalize() + "\n"
+            text += "*" * 30 + "\n"
+            for lfn in list_lfns:
+                text += lfn + "\n"
+
+        f = open(lfns_file_name + ".txt", "a")
+        f.write(text)
+        f.close()
+
     def results_to_csv(self, json_results, write_lfns=False):
         """
         :param json_results:
         :return:
         """
-        SEPARATION_COLUMNS = 2
-        SEPARATION_ROWS = 4
-        columns = [Cte.REF_TIMESTAMP, Cte.REF_TIMESTAMP_HR, Cte.REF_ERROR_LOG,
-                   Cte.REF_SE_SRC, Cte.REF_SE_DST, Cte.REF_PFN_SRC, Cte.REF_PFN_DST, Cte.REF_LFN_SRC, Cte.REF_LFN_DST,
-                   Cte.REF_NUM_ERRORS, "job_id", "file_id"]
+        columns = [CteFTS.REF_TIMESTAMP, CteFTS.REF_TIMESTAMP_HR, CteFTS.REF_LOG,
+                   CteFTS.REF_SE_SRC, CteFTS.REF_SE_DST, CteFTS.REF_PFN_SRC, CteFTS.REF_PFN_DST, CteFTS.REF_LFN_SRC,
+                   CteFTS.REF_LFN_DST, CteFTS.REF_NUM_ERRORS, CteFTS.REF_JOB_ID, CteFTS.REF_FILE_ID]
+
         ############  ITERATE OVER ALL SRMs HOSTS ############
         for storage_element, se_value in json_results.items():
             time_analysis = round(time.time())
@@ -309,18 +243,18 @@ class Transfers(AbstractQueries, ABC):
                 group_id = 1
                 users, endpoints, lfns = {}, {}, {}
                 if "s" == direction[0]:
-                    other_direction = Cte.REF_SE_DST
-                    other_url_direction = Cte.REF_PFN_DST
-                    other_lfn = Cte.REF_LFN_DST
-                    same_url_direction = Cte.REF_PFN_SRC
-                    same_lfn = Cte.REF_LFN_SRC
+                    other_direction = CteFTS.REF_SE_DST
+                    other_url_direction = CteFTS.REF_PFN_DST
+                    other_lfn = CteFTS.REF_LFN_DST
+                    same_url_direction = CteFTS.REF_PFN_SRC
+                    same_lfn = CteFTS.REF_LFN_SRC
 
                 else:
-                    other_direction = Cte.REF_SE_SRC
-                    other_url_direction = Cte.REF_PFN_SRC
-                    same_url_direction = Cte.REF_PFN_DST
-                    other_lfn = Cte.REF_LFN_SRC
-                    same_lfn = Cte.REF_LFN_DST
+                    other_direction = CteFTS.REF_SE_SRC
+                    other_url_direction = CteFTS.REF_PFN_SRC
+                    same_url_direction = CteFTS.REF_PFN_DST
+                    other_lfn = CteFTS.REF_LFN_SRC
+                    same_lfn = CteFTS.REF_LFN_DST
 
                 ############  ITERATE OVER ALL ERROR GROUPS ############
                 for error_key, error_value in direction_value.items():
@@ -334,7 +268,7 @@ class Transfers(AbstractQueries, ABC):
                         user_site = self.get_user(single_error[same_url_direction])
                         user_other = self.get_user(single_error[other_url_direction])
                         if user_site:
-                            users[group_id] += [user_site] * single_error[Cte.REF_NUM_ERRORS]
+                            users[group_id] += [user_site] * single_error[CteFTS.REF_NUM_ERRORS]
                             if user_other and user_site != user_other:
                                 logging.error("Different users {} vs {}".format(user_site, user_other))
                             if user_site not in list_users:
@@ -342,7 +276,7 @@ class Transfers(AbstractQueries, ABC):
 
                         # ADD ENDPOINT IN LIST
                         other_endpoint = single_error[other_direction]
-                        endpoints[group_id] += [other_endpoint] * single_error[Cte.REF_NUM_ERRORS]
+                        endpoints[group_id] += [other_endpoint] * single_error[CteFTS.REF_NUM_ERRORS]
                         if other_endpoint not in list_other_endpoint:
                             list_other_endpoint.append(other_endpoint)
 
@@ -357,7 +291,7 @@ class Transfers(AbstractQueries, ABC):
                         # Row errors table
                         list_errors.append(values_columns)
                         # Count total of failed transfers for each group
-                        failed_transfers += single_error[Cte.REF_NUM_ERRORS]
+                        failed_transfers += single_error[CteFTS.REF_NUM_ERRORS]
 
                     # Row table (legend) group errors
                     list_groups.append([group_id, error_key, len(error_value), failed_transfers])
@@ -365,21 +299,11 @@ class Transfers(AbstractQueries, ABC):
 
                 # WRITE TXT WITH LFNs
                 if write_lfns:
-                    text = ""
-                    for error, list_lfns in lfns.items():
-                        text += "*"*30 + "\n"
-                        text += error.capitalize() + "\n"
-                        text += "*" * 30 + "\n"
-                        for lfn in list_lfns:
-                            text += lfn + "\n"
-
                     lfns_file_name = file_name + "_LFNs_{}".format(direction)
-                    f = open(lfns_file_name + ".txt", "a")
-                    f.write(text)
-                    f.close()
+                    self.write_lfn_txt(lfns_file_name, lfns)
 
                 # DF ERRORS
-                columns_errors = columns + ["user", "group_id"]
+                columns_errors = columns + [CteFTS.REF_USER, "group_id"]
                 num_columns_error = len(columns_errors)
                 df = pd.DataFrame(list_errors, columns=columns_errors)
                 df.to_excel(writer, sheet_name=direction, index=False)
@@ -387,7 +311,7 @@ class Transfers(AbstractQueries, ABC):
 
                 # DF LEGEND GROUPS
                 columns_groups = ["group_id", "error_ref", "num_diff_errors", "num_failed_transfers"]
-                start_column = num_columns_error + SEPARATION_COLUMNS
+                start_column = num_columns_error + CteFTS.SEPARATION_COLUMNS
                 df_group = pd.DataFrame(list_groups, columns=columns_groups)
                 df_group.to_excel(writer, sheet_name=direction, startcol=start_column, index=False)
                 column_id_group = self.get_column_id(len(list_groups), start_column + 1)
@@ -395,8 +319,8 @@ class Transfers(AbstractQueries, ABC):
                 # DF USERS
                 list_group_users = self.get_sub_table(users, list_users)
                 columns_users = ["group_id"] + list_users
-                start_column = num_columns_error + SEPARATION_COLUMNS
-                start_row_users = len(list_groups) + SEPARATION_ROWS
+                start_column = num_columns_error + CteFTS.SEPARATION_COLUMNS
+                start_row_users = len(list_groups) + CteFTS.SEPARATION_ROWS
                 if list_group_users:
                     df_users = pd.DataFrame(list_group_users, columns=columns_users)
                     df_users.to_excel(writer, sheet_name=direction, startcol=start_column, startrow=start_row_users,
@@ -405,8 +329,8 @@ class Transfers(AbstractQueries, ABC):
                 # DF ENDPOINTS
                 list_group_endpoints = self.get_sub_table(endpoints, list_other_endpoint)
                 columns_endpoints = ["group_id"] + list_other_endpoint
-                start_column = num_columns_error + SEPARATION_COLUMNS
-                start_row = start_row_users + len(list_group_users) + SEPARATION_ROWS
+                start_column = num_columns_error + CteFTS.SEPARATION_COLUMNS
+                start_row = start_row_users + len(list_group_users) + CteFTS.SEPARATION_ROWS
                 if list_group_endpoints:
                     df_endpoint = pd.DataFrame(list_group_endpoints, columns=columns_endpoints)
                     df_endpoint.to_excel(writer, sheet_name=direction, startcol=start_column, startrow=start_row,
@@ -421,26 +345,43 @@ class Transfers(AbstractQueries, ABC):
 
 
 if __name__ == "__main__":
-    time_class = Time(hours=4)
+    time_class = Time(hours=24)
     fts = Transfers(time_class)
-    # a = fts.analyze_site(hostname="srm-cms.gridpp.rl.ac.uk")
-    BLACKLIST_PFN = ["se3.itep.ru", "LoadTest", "se01.indiacms.res.in"]
-    dict_result = fts.analyze_site(site_name="T2_CH_CERN") #, interested_error="SRM_INVALID_REQUEST")  # , error="CHECKSUM")
+    BLACKLIST_PFN = ["se3.itep.ru", "LoadTest"]
+    dict_result = fts.analyze_site(site="T1_UK_RAL")
     with open('all.json', 'w') as outfile:
         json.dump(dict_result, outfile)
 
     with open('all.json') as outfile:
         data = json.load(outfile)
     fts.results_to_csv(data, write_lfns=False)
-    # error = "User timeout over"
 
-    # kibana_query = "data.vo:cms AND source_se:/.*storm.ifca.es.*/ AND data.reason:/.*\"{}\".*/".format(error)
-    # kibana_query = "data.vo:cms  AND data.source_se:/.*gftp.t2.ucsd.edu.*/ AND data.file_state:FAILED " \
-    #                "AND data.reason:/.*CHECKSUM.*|.*No such file.*/"
 
-    # endpoint = "srm-cms.gridpp.rl.ac.uk"
-    # # reason = "AND data.reason:/.*\"User timeout over\".*/"
-    # reason = ""
-    # kibana_query = "data.vo:cms AND data.file_state:FAILED AND " \
-    #                "(data.source_se:/.*{}.*/ OR data.dest_se:/.*{}.*/) {}".format(endpoint, endpoint, reason)
-    # # kibana_query = "data.vo:cms  AND data.dest_se:/.*eoscmsftp.cern.ch.*/ AND data.file_state:FAILED"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

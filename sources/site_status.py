@@ -1,6 +1,10 @@
-from query_utils import *
 from vofeed import VOFeed
 from sam3 import SAMTest
+from constants import CteSAM as CteSAM
+import pandas as pd
+from abc import ABC
+from query_utils import AbstractQueries, group_data, Time
+from copy import deepcopy
 
 """
 ---------------------------------------------------------------------------------
@@ -101,142 +105,90 @@ class AbstractSiteStatus(AbstractQueries, ABC):
         self.sam3 = SAMTest(time_class)
 
     def get_kibana_query(self, metric, status="", name="", flavour=""):
+        if "CE" in flavour:
+            flavour = "CE"
+        if "XROOTD" in flavour:
+            flavour = "XRD"
         kibana_query = "metadata.path:" + metric + self.str_freq
         if name:
-            kibana_query += Cte.AND + "data.name:" + name
+            kibana_query += CteSAM.AND + "data.name:" + name
         if status:
-            kibana_query += Cte.AND + "data.status:" + status
+            kibana_query += CteSAM.AND + "data.status:" + status
         if flavour:
-            kibana_query += Cte.AND + "data.type:" + flavour
+            kibana_query += CteSAM.AND + "data.type:" + flavour
         return kibana_query
 
-    def get_specific_data(self, test=None):
-        specific_data = {}
-        if self.specific_fields:
-            for field_name in self.specific_fields:
-                if field_name and test and field_name in test["data"].keys():
-                    field_value = test["data"][field_name]
-                    specific_data.update({field_name: field_value})
-        return specific_data
-
-    def get_common_data(self, test):
-        status = test["data"]["status"]
-        timestamp = test["metadata"]["timestamp"]
-        timestamp_hr = timestamp_to_human_utc(timestamp)
-        detail = test["data"]["detail"]
-
-        return status, timestamp, timestamp_hr, detail
-
     def get_issues(self, response_all):
-        status = "ok"
-        list_errors = []
-        num_errors_row = 0
-        issues = {}
-
-        tests_evaluated = len(response_all)
-
-        response_not_ok = [test for test in response_all if test["data"]["status"] != "ok"]
-        num_not_ok_tests = int(len(response_not_ok))
-        num_ok_tests = tests_evaluated - num_not_ok_tests
-        percent = (num_ok_tests / tests_evaluated) * 100
-
-        # IN A ROW EVALUATION
-        if num_ok_tests < Cte.NUM_MIN_OK:
-            status_in_a_row = ""
-            num_errors_row = tests_evaluated
-            for num_error, test in enumerate(reversed(response_all)):
-                status_test = test["data"]["status"]
-                if not status_in_a_row:
-                    status_in_a_row = status_test
-                if status_test != status_in_a_row:
-                    num_errors_row = num_error
-                    break
-
-            # DETAILED ERROR EVALUATION
-            for test in response_not_ok:
-                status_failure = test["data"]["status"]
-                if status_failure not in issues.keys():
-                    issues.update({status_failure: 1})
-                else:
-                    issues[status_failure] += 1
-                issue = {}
-                # status, timestamp, timestamp_hr, details = self.get_common_data(test)
-                # issue.update(self.get_specific_data(test))
-                # Details
-                if "detail" in test["data"].keys():
-                    details = test["data"]["detail"]
+        list_errors, all_status = [], []
+        num_status_row, num_errors = 0, 0
+        for num_test, test in enumerate(response_all):
+            test_data = test[CteSAM.REF_DATA]
+            status_test = test_data[CteSAM.REF_STATUS]
+            all_status.append(status_test)
+            if status_test != "ok":
+                num_errors += 1
+                # DETAILED ERROR EVALUATION
+                if CteSAM.REF_LOG_CMSSST in test_data.keys():
+                    details = test_data[CteSAM.REF_LOG_CMSSST]
                     if details:
                         metrics = [elem for elem in details.split(",") if elem]
                         for elem in metrics:
                             metric_error = elem.split("(")[0].strip()
-                            if metric_error not in list_errors and status_failure != "ok":
+                            if metric_error not in list_errors and status_test != "ok":
                                 list_errors.append(elem.split("(")[0].strip())
-                    # issue.update({"detail": split_details})
-                # issue.update({"status": status, "timestamp": timestamp, "timestamp_hr": timestamp_hr})
-                # info_error.append(issue)
-            if list_errors:
-                status = max(issues, key=issues.get)
-
-        return status, list_errors, num_errors_row, num_not_ok_tests
-
-    def remove_duplicate_responses(self, response_all):
-        times = []
-        clean_response = []
-        for response in response_all:
-            time_test = response["metadata"]["timestamp"]
-            if time_test not in times:
-                times.append(time_test)
-                clean_response.append(response)
-        return clean_response
-
-    def get_status(self, metrics):
-        for metric in metrics:
-            kibana_query_all = self.get_kibana_query(metric, name="/.*{}.*/".format(self.site_name))
-            response_all = self.get_direct_response(kibana_query=kibana_query_all, max_results=10000)
-            clean_response = self.remove_duplicate_responses(response_all)
-            status, list_errors, num_errors_row = self.get_issues(clean_response)
+            if all_status and all_status[num_test-1] == status_test:
+                num_status_row += 1
+        most_frequent_status = max(set(all_status), key=all_status.count)
+        return most_frequent_status, list_errors, num_status_row, num_errors
 
     def get_issues_resources(self):
-        resources_evaluated = {}
+        resources_evaluated = []
+        rows = []
+        columns = [CteSAM.REF_TIMESTAMP_HR, CteSAM.REF_SITE, CteSAM.REF_HOST, CteSAM.REF_FLAVOUR, CteSAM.REF_STATUS,
+                   'num_row_failures', 'num_failed_tests', 'failed_test', CteSAM.REF_LOG, CteSAM.REF_NUM_ERRORS]
         for resource in self.site_resources:
-            hostname = resource["hostname"]
-            flavour = resource["flavour"]
-            site = resource["site"]
-            errors_dict = {}
-            status = "ok"
-            if "production" not in resource.keys() and site not in BLACKLIST_SITES:
-                if "CE" in flavour:
-                    flavour = "CE"
-                if "XROOTD" in flavour:
-                    flavour = "XRD"
-                kibana_query_all = self.get_kibana_query("sam", name=hostname, flavour=flavour)
-                response_all = self.get_direct_response(kibana_query=kibana_query_all)
-                if not response_all:
-                    raise Exception("NO RESPONSE")
-                status, list_errors, num_errors_row, num_not_ok_tests = self.get_issues(response_all)
-                if status != "ok" and list_errors:
-                    print("{}: {} {} \n {}".format(site, hostname, flavour,
-                                                response_all[0]["metadata"]["path"]))
-                    print("ERROR: {} not oks --> out of {}".format(num_not_ok_tests, Cte.TOTAL_TESTS_EVALUATED))
-                    print("{} {} in a row".format(num_errors_row, status))
-                    print("list errors ", list_errors)
-                    print("*" * 20)
+            hostname = resource[CteSAM.REF_HOST]
+            flavour = resource[CteSAM.REF_FLAVOUR]
+            site = resource[CteSAM.REF_SITE]
 
-                    if status == "error":
+            is_test_endpoint = "production" in resource.keys()
+            is_blacklisted = site in BLACKLIST_SITES
+
+            if not is_test_endpoint and not is_blacklisted:
+                kibana_query_all = self.get_kibana_query("sam", name=hostname, flavour=flavour)
+                response_kibana_cmssst = self.get_direct_response(kibana_query=kibana_query_all)
+                status, list_errors, num_errors_row, num_not_ok_tests = self.get_issues(response_kibana_cmssst)
+                if status != "ok" and list_errors:
+                    if status != "unknown":
                         for metric_with_error in list_errors:
-                            logs = self.sam3.get_details_test(hostname=hostname, metric_name=metric_with_error)
-                            times_saved = []
-                            clean_logs = []
-                            for log in logs:
-                                timestamp = log["data"]["timestamp"]
-                                if timestamp not in times_saved:
-                                    times_saved.append(timestamp)
-                                    clean_logs.append(log)
-                            errors_dict.update({metric_with_error: clean_logs})
-            # else:
-            #     print("Test endpoint")
-            resources_evaluated.update(
-                {"hostname": hostname, "flavour": flavour, "site": site, "status": status, "errors_dict": errors_dict})
+                            response_kibana_sam3 = self.sam3.get_details_test(hostname=hostname,
+                                                                              metric_name=metric_with_error)
+                            ############ GROUP DATA BY ERRORS ############
+                            grouped_by_error = {}
+                            ############ ITERATE OVER ALL ERRORS ############
+                            for error in response_kibana_sam3:
+                                # Extract useful data
+                                if CteSAM.REF_LOG in error[CteSAM.REF_DATA].keys():
+                                    ############ GROUP THE ERROR ############
+                                    error_data = deepcopy(error[CteSAM.REF_DATA])
+                                    grouped_by_error = group_data(grouped_by_error, error_data, ['metric_name'], CteSAM)
+                            for error_grouped, value_error in grouped_by_error.items():
+                                for single_error in value_error:
+                                    rows.append(
+                                        [single_error[CteSAM.REF_TIMESTAMP_HR], site, hostname, flavour, status,
+                                         num_not_ok_tests, num_errors_row, metric_with_error, error_grouped,
+                                         single_error[CteSAM.REF_NUM_ERRORS]])
+                    else:
+                        rows.append(
+                            ["time", site, hostname, flavour, status, num_not_ok_tests,
+                             num_errors_row,
+                             str(list_errors), None, None])
+
+        writer = pd.ExcelWriter("test" + ".xlsx", engine='xlsxwriter')
+        df_group = pd.DataFrame(rows, columns=columns)
+        df_group.to_excel(writer, index=False)
+        writer.save()
+
         return resources_evaluated
 
 
@@ -246,20 +198,20 @@ class TestsAbstract:
         self.specific_fields = specific_fields
 
 
-class Tests:
-    SAM = TestsAbstract(metric="sam")
-    HammerCloud = TestsAbstract(metric="hc")
-    FTS = TestsAbstract(metric="fts", specific_fields=["quality"])
-    SiteReadiness = TestsAbstract(metric="sr", specific_fields=["value"])
-    Downtime = TestsAbstract(metric="down", specific_fields=["duration"])
-    SiteStatus = TestsAbstract(metric="sts", specific_fields=["prod_status", "crab_status", "manual_life",
-                                                              "manual_prod", "manual_crab"])
+# class Tests:
+#     SAM = TestsAbstract(metric="sam")
+#     HammerCloud = TestsAbstract(metric="hc")
+#     FTS = TestsAbstract(metric="fts", specific_fields=["quality"])
+#     SiteReadiness = TestsAbstract(metric="sr", specific_fields=["value"])
+#     Downtime = TestsAbstract(metric="down", specific_fields=["duration"])
+#     SiteStatus = TestsAbstract(metric="sts", specific_fields=["prod_status", "crab_status", "manual_life",
+#                                                               "manual_prod", "manual_crab"])
 
 
 if __name__ == "__main__":
     BLACKLIST_SITES = ["T2_PL_Warsaw", "T2_RU_ITEP"]
-    time = Time(hours=Cte.HOURS_RANGE)
-    sam = AbstractSiteStatus(time, site_name="T2")
+    time = Time(hours=CteSAM.HOURS_RANGE)
+    sam = AbstractSiteStatus(time, site_name="T2_PT_NCG_Lisbon")
     # sam.get_status(metrics=[Tests.SAM.metric, Tests.HammerCloud.metric])
     errors = sam.get_issues_resources()
     print()
