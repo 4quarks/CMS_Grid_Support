@@ -5,6 +5,7 @@ class Constants:
     QUOTE = "\""
     INCLUDED = ".*{}.*"
     EXPRESSION = "/{}/"
+    ADD_DATA = " AND data.{}:/.*\"{}\".*/"
 
     # COMMON
     REF_NUM_ERRORS = "num_errors"
@@ -81,3 +82,4 @@ class CteSAM(Constants):
     REF_LOG = "details"
     REF_LOG_CMSSST = "detail"
     REF_STATUS = "status"
+

@@ -87,11 +87,9 @@ class VOFeed(AbstractQueries, ABC):
         return resources_site
 
     def update_mongo_vofeed(self, site_name=""):
-        if site_name:
-            all_resources = self.get_site_resources("/.*.*/".format(site_name))
-            self.mongo.insert_list_documents(self.mongo.vofeed, all_resources, delete_collection=True)
-        else:
-            raise Exception("Introduce site")
+        all_resources = self.get_site_resources("/.*{}.*/".format(site_name))
+        self.mongo.insert_list_documents(self.mongo.vofeed, all_resources, delete_collection=True)
+
 
     def get_resource_filtered(self, flavour="", hostname="", site=""):
         query = {}

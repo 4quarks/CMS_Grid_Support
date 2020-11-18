@@ -2,6 +2,7 @@ from vofeed import VOFeed
 from sam3 import SAMTest
 from constants import CteSAM as CteSAM
 import pandas as pd
+import time
 from abc import ABC
 from query_utils import AbstractQueries, group_data, Time
 from copy import deepcopy
@@ -87,7 +88,7 @@ data.RemoveReason:/"Removed due to wall clock limit"/
 
 
 class AbstractSiteStatus(AbstractQueries, ABC):
-    def __init__(self, time_class, site_name="", str_freq="15min", specific_fields=None, flavour=None):
+    def __init__(self, time_class, site="", str_freq="15min", specific_fields=None, flavour=None):
         super().__init__(time_class)
         self.index_name = "monit_prod_cmssst*"
         self.index_id = "9475"
@@ -96,11 +97,11 @@ class AbstractSiteStatus(AbstractQueries, ABC):
 
         self.str_freq = str_freq
 
-        self.site_name = site_name
+        self.site_name = site
 
         self.vofeed = VOFeed(0)
         self.flavour = flavour
-        self.site_resources = self.vofeed.get_resource_filtered(site=site_name, flavour=flavour)
+        self.site_resources = self.vofeed.get_resource_filtered(site=site, flavour=flavour)
 
         self.sam3 = SAMTest(time_class)
 
@@ -157,34 +158,37 @@ class AbstractSiteStatus(AbstractQueries, ABC):
             if not is_test_endpoint and not is_blacklisted:
                 kibana_query_all = self.get_kibana_query("sam", name=hostname, flavour=flavour)
                 response_kibana_cmssst = self.get_direct_response(kibana_query=kibana_query_all)
-                status, list_errors, num_errors_row, num_not_ok_tests = self.get_issues(response_kibana_cmssst)
-                if status != "ok" and list_errors:
-                    if status != "unknown":
-                        for metric_with_error in list_errors:
-                            response_kibana_sam3 = self.sam3.get_details_test(hostname=hostname,
-                                                                              metric_name=metric_with_error)
-                            ############ GROUP DATA BY ERRORS ############
-                            grouped_by_error = {}
-                            ############ ITERATE OVER ALL ERRORS ############
-                            for error in response_kibana_sam3:
-                                # Extract useful data
-                                if CteSAM.REF_LOG in error[CteSAM.REF_DATA].keys():
-                                    ############ GROUP THE ERROR ############
-                                    error_data = deepcopy(error[CteSAM.REF_DATA])
-                                    grouped_by_error = group_data(grouped_by_error, error_data, ['metric_name'], CteSAM)
-                            for error_grouped, value_error in grouped_by_error.items():
-                                for single_error in value_error:
-                                    rows.append(
-                                        [single_error[CteSAM.REF_TIMESTAMP_HR], site, hostname, flavour, status,
-                                         num_not_ok_tests, num_errors_row, metric_with_error, error_grouped,
-                                         single_error[CteSAM.REF_NUM_ERRORS]])
-                    else:
-                        rows.append(
-                            ["time", site, hostname, flavour, status, num_not_ok_tests,
-                             num_errors_row,
-                             str(list_errors), None, None])
+                if response_kibana_cmssst:
+                    status, list_errors, num_errors_row, num_not_ok_tests = self.get_issues(response_kibana_cmssst)
+                    if status != "ok" and list_errors:
+                        if status != "unknown":
+                            for metric_with_error in list_errors:
+                                response_kibana_sam3 = self.sam3.get_details_test(hostname=hostname,
+                                                                                  metric_name=metric_with_error)
+                                ############ GROUP DATA BY ERRORS ############
+                                grouped_by_error = {}
+                                ############ ITERATE OVER ALL ERRORS ############
+                                for error in response_kibana_sam3:
+                                    # Extract useful data
+                                    if CteSAM.REF_LOG in error[CteSAM.REF_DATA].keys():
+                                        ############ GROUP THE ERROR ############
+                                        error_data = deepcopy(error[CteSAM.REF_DATA])
+                                        grouped_by_error = group_data(grouped_by_error, error_data, ['metric_name'], CteSAM)
+                                for error_grouped, value_error in grouped_by_error.items():
+                                    for single_error in value_error:
+                                        rows.append(
+                                            [single_error[CteSAM.REF_TIMESTAMP_HR], site, hostname, flavour, status,
+                                             num_not_ok_tests, num_errors_row, metric_with_error, error_grouped,
+                                             single_error[CteSAM.REF_NUM_ERRORS]])
+                        else:
+                            rows.append(
+                                ["time", site, hostname, flavour, status, num_not_ok_tests,
+                                 num_errors_row,
+                                 str(list_errors), None, None])
 
-        writer = pd.ExcelWriter("test" + ".xlsx", engine='xlsxwriter')
+        timestamp_now = round(time.time())
+        file_name = "{}_{}".format(timestamp_now, "SiteStatus")
+        writer = pd.ExcelWriter(file_name + ".xlsx", engine='xlsxwriter')
         df_group = pd.DataFrame(rows, columns=columns)
         df_group.to_excel(writer, index=False)
         writer.save()
@@ -210,8 +214,8 @@ class TestsAbstract:
 
 if __name__ == "__main__":
     BLACKLIST_SITES = ["T2_PL_Warsaw", "T2_RU_ITEP"]
-    time = Time(hours=CteSAM.HOURS_RANGE)
-    sam = AbstractSiteStatus(time, site_name="T2_PT_NCG_Lisbon")
+    time_ss = Time(hours=CteSAM.HOURS_RANGE)
+    sam = AbstractSiteStatus(time_ss, site="T1|T2")
     # sam.get_status(metrics=[Tests.SAM.metric, Tests.HammerCloud.metric])
     errors = sam.get_issues_resources()
     print()

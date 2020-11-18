@@ -41,7 +41,10 @@ sudo systemctl start mongod
 sudo systemctl status mongod
 mongo
 ```
-
+- Download NLP model:
+```
+python -m spacy download en_core_web_lg
+```
 ### Add environmental variables:
 - export MONGODB_HOST=localhost:27017
 - export GRAFANA_KEY=Bearer FNJZ0gyS...
@@ -49,6 +52,14 @@ mongo
 e.g. in Pycharm https://stackoverflow.com/questions/42708389/how-to-set-environment-variables-in-pycharm
 ## First steps to execute FTS analysis
 1. Run vofeed.py to dump all data to mongodb
-2. Run transfers.py setting the desired configuration
+2. Select the time scope of your search. e.g. Time(hours=24)
+3. Define the elements that you do not want to find on the source/destination URL. e.g. BLACKLIST_PFN = ["se3.itep.ru", "LoadTest"] 
+4. Introduce the site name or the host name. e.g. fts.analyze_site(site="T2_HU_Budapest")
+5. Run transfers.py
 
+## First steps to execute Site Status analysis
+1. Run vofeed.py to dump all data to mongodb
+2. Define the sites that you are not interested in. e.g. BLACKLIST_SITES = ["T2_PL_Warsaw", "T2_RU_ITEP"]
+3. Introduce site or the scope to analyze. AbstractSiteStatus(time_ss, site="T1|T2")
+4. Run site_status.py
 

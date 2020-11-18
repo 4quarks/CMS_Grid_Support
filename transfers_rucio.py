@@ -95,16 +95,6 @@ class Transfers(AbstractQueries, ABC):
         super().__init__(time_class)
         self.index_name = CteFTS.INDEX_ES
         self.index_id = CteFTS.INDEX_ES_ID
-        self.mongo = MongoDB()
-
-    def get_mongo_query(self, site="", hostname=""):
-        ############ GET SRM ELEMENTS OF THE SITE ############
-        mongo_query = {CteFTS.REF_FLAVOUR: "SRM"}
-        if site:
-            mongo_query.update({CteFTS.REF_SITE: site})
-        if hostname:
-            mongo_query.update({CteFTS.REF_HOST: hostname})
-        return mongo_query
 
     def is_blacklisted(self, src_url, dest_url):
         """
@@ -128,20 +118,21 @@ class Transfers(AbstractQueries, ABC):
             raise Exception("MULTIPLE USERS ON PFN")
         return user
 
-    def build_query_get_response(self, hostname, direction="", filter_error_kibana=""):
+    def build_query_get_response(self, direction, site="", hostname="", filter_error_kibana=""):
         """
 
         :param hostname: name of the host to analyze e.g. eoscmsftp.cern.ch
-        :param direction: source_se or dest_se
+        :param direction: s / d
         :param filter_error_kibana: keyword of the error to find e.g. "No such file"
         :return:
         """
         ############ CONSTRUCT THE QUERY ############
-        kibana_query_failed = "data.vo:cms AND data.file_state:{} AND data.{}:/.*{}.*/ ".format("FAILED", direction,
-                                                                                                hostname)
+        kibana_query_failed = "data.vo:cms AND data.event_type:{}".format("transfer-failed")
+        if hostname:
+            kibana_query_failed += CteFTS.ADD_DATA.format(direction, hostname)
         # If an error is specified --> add filter on the query
         if filter_error_kibana:
-            kibana_query_failed += " AND data.{}:/.*\"{}\".*/".format(CteFTS.REF_LOG, filter_error_kibana)
+            kibana_query_failed += CteFTS.ADD_DATA.format(CteFTS.REF_LOG, filter_error_kibana)
 
         ############ QUERY TO ELASTICSEARCH ############
         response_failed = self.get_direct_response(kibana_query=kibana_query_failed, max_results=10000)
@@ -152,42 +143,37 @@ class Transfers(AbstractQueries, ABC):
         Get json with all the errors grouped by: host, destination/origin, type of error
         """
         all_data = {}
-        mongo_query = self.get_mongo_query(site, hostname)
-        list_site_info = self.mongo.find_document(self.mongo.vofeed, mongo_query)
-        if list_site_info:
-            hosts_name = [info[CteFTS.REF_HOST] for info in list_site_info if info]
-            ############  ITERATE OVER ALL SRMs HOSTS ############
-            for hostname in hosts_name:
-                data_host = {}
-                ############ GET DATA ORIGIN AND DESTINATION ############
-                for direction in [CteFTS.REF_SE_SRC, CteFTS.REF_SE_DST]:
-                    time.sleep(0.1)
-                    response_kibana = self.build_query_get_response(hostname, direction=direction,
-                                                                    filter_error_kibana=filter_error_kibana)
-                    ############ GROUP DATA BY ERRORS ############
-                    grouped_by_error = {}
-                    ############ ITERATE OVER ALL ERRORS ############
-                    for error in response_kibana:
-                        error_data = deepcopy(error[CteFTS.REF_DATA])
-                        src_url = error_data[CteFTS.REF_PFN_SRC]
-                        dst_url = error_data[CteFTS.REF_PFN_DST]
-                        ############ AVOID ERRORS THAT ARE BLACKLISTED ############ç
-                        in_blacklist = self.is_blacklisted(src_url, dst_url)
-                        # Extract useful data
-                        if CteFTS.REF_LOG in error_data.keys() and not in_blacklist:
-                            ############ ADD EXTRA DATA ############
-                            src_lfn, _ = get_lfn_and_short_pfn(src_url)
-                            dst_lfn, _ = get_lfn_and_short_pfn(dst_url)
-                            error_data.update({CteFTS.REF_LFN_SRC: src_lfn, CteFTS.REF_LFN_DST: dst_lfn})
-                            # Clean se
-                            error_data[CteFTS.REF_SE_SRC] = error_data[CteFTS.REF_SE_SRC].split("/")[-1]
-                            error_data[CteFTS.REF_SE_DST] = error_data[CteFTS.REF_SE_DST].split("/")[-1]
-                            ############ GROUP THE ERROR ############
-                            grouped_by_error = group_data(grouped_by_error, error_data,
-                                                          [CteFTS.REF_PFN_SRC, CteFTS.REF_PFN_DST], CteFTS)
-                    if grouped_by_error:
-                        data_host.update({direction: grouped_by_error})
-                all_data.update({hostname: data_host})
+
+        data_host = {}
+        ############ GET DATA ORIGIN AND DESTINATION ############
+        for direction in ["s", "d"]:
+            time.sleep(0.1)
+            response_kibana = self.build_query_get_response(hostname, direction=direction,
+                                                            filter_error_kibana=filter_error_kibana)
+            ############ GROUP DATA BY ERRORS ############
+            grouped_by_error = {}
+            ############ ITERATE OVER ALL ERRORS ############
+            for error in response_kibana:
+                error_data = deepcopy(error[CteFTS.REF_DATA])
+                src_url = error_data[CteFTS.REF_PFN_SRC]
+                dst_url = error_data[CteFTS.REF_PFN_DST]
+                ############ AVOID ERRORS THAT ARE BLACKLISTED ############ç
+                in_blacklist = self.is_blacklisted(src_url, dst_url)
+                # Extract useful data
+                if CteFTS.REF_LOG in error_data.keys() and not in_blacklist:
+                    ############ ADD EXTRA DATA ############
+                    src_lfn, _ = get_lfn_and_short_pfn(src_url)
+                    dst_lfn, _ = get_lfn_and_short_pfn(dst_url)
+                    error_data.update({CteFTS.REF_LFN_SRC: src_lfn, CteFTS.REF_LFN_DST: dst_lfn})
+                    # Clean se
+                    error_data[CteFTS.REF_SE_SRC] = error_data[CteFTS.REF_SE_SRC].split("/")[-1]
+                    error_data[CteFTS.REF_SE_DST] = error_data[CteFTS.REF_SE_DST].split("/")[-1]
+                    ############ GROUP THE ERROR ############
+                    grouped_by_error = group_data(grouped_by_error, error_data,
+                                                  [CteFTS.REF_PFN_SRC, CteFTS.REF_PFN_DST], CteFTS)
+            if grouped_by_error:
+                data_host.update({direction: grouped_by_error})
+        all_data.update({hostname: data_host})
         return all_data
 
     def get_column_id(self, num_rows, num_columns_ahead=0, num_rows_ahead=0):
@@ -345,9 +331,9 @@ class Transfers(AbstractQueries, ABC):
 if __name__ == "__main__":
     time_class = Time(hours=24)
     fts = Transfers(time_class)
-    BLACKLIST_PFN = ["se3.itep.ru", "LoadTest", "storm-fe-cms.cr.cnaf.infn.it", "cmsdcatape.fnal.gov"]
-    dict_result = fts.analyze_site(site="T2_HU_Budapest")
-    fts.results_to_csv(dict_result, write_lfns=False)
+    BLACKLIST_PFN = ["se3.itep.ru", "LoadTest"]
+    dict_result = fts.analyze_site(site="T0_CH_CERN")
+    fts.results_to_csv(dict_result, write_lfns=True)
 
 
 

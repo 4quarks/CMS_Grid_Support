@@ -5,7 +5,9 @@ from copy import deepcopy
 from constants import Constants as Cte
 import datetime
 from abc import ABC
+import spacy
 
+spacy_nlp = spacy.load("en_core_web_lg")
 
 FIRST_QUERY = {
     "search_type": "query_then_fetch",
@@ -160,12 +162,7 @@ class AbstractQueries(ABC):
         response_clean = []
         if json_response:
             response_clean = [element["_source"] for element in json_response['responses'][0]['hits']['hits']]
-        if not response_clean:
-            raise Exception("NO RESPONSE")
         return response_clean
-
-import spacy
-spacy_nlp = spacy.load("en_core_web_lg")
 
 
 class AbstractNLP:
