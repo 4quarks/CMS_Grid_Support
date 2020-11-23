@@ -1,12 +1,12 @@
 import logging
-from constants import CteFTS as CteFTS
+from constants import CteFTS
 import time
 from copy import deepcopy
 from abc import ABC
 import re
 from mongotools import MongoDB
 import pandas as pd
-from query_utils import AbstractQueries, get_lfn_and_short_pfn, group_data, Time
+from query_utils import AbstractQueries, get_lfn_and_short_pfn, group_data, Time, timestamp_to_human_utc
 import xlsxwriter
 
 """
@@ -178,7 +178,9 @@ class Transfers(AbstractQueries, ABC):
                             ############ ADD EXTRA DATA ############
                             src_lfn, _ = get_lfn_and_short_pfn(src_url)
                             dst_lfn, _ = get_lfn_and_short_pfn(dst_url)
-                            error_data.update({CteFTS.REF_LFN_SRC: src_lfn, CteFTS.REF_LFN_DST: dst_lfn})
+                            timestamp_hr = timestamp_to_human_utc(error_data[CteFTS.REF_TIMESTAMP])
+                            error_data.update({CteFTS.REF_LFN_SRC: src_lfn, CteFTS.REF_LFN_DST: dst_lfn,
+                                               CteFTS.REF_TIMESTAMP_HR: timestamp_hr})
                             # Clean se
                             error_data[CteFTS.REF_SE_SRC] = error_data[CteFTS.REF_SE_SRC].split("/")[-1]
                             error_data[CteFTS.REF_SE_DST] = error_data[CteFTS.REF_SE_DST].split("/")[-1]
@@ -345,9 +347,9 @@ class Transfers(AbstractQueries, ABC):
 if __name__ == "__main__":
     time_class = Time(hours=24)
     fts = Transfers(time_class)
-    BLACKLIST_PFN = ["se3.itep.ru", "LoadTest", "storm-fe-cms.cr.cnaf.infn.it", "cmsdcatape.fnal.gov"]
-    dict_result = fts.analyze_site(site="T2_HU_Budapest")
-    fts.results_to_csv(dict_result, write_lfns=False)
+    BLACKLIST_PFN = ["se3.itep.ru", "se01.indiacms.res.in", "cmsio.rc.ufl.edu", "cmsdcatape.fnal.gov"]
+    dict_result = fts.analyze_site(site="T2_DE_RWTH")
+    fts.results_to_csv(dict_result, write_lfns=True)
 
 
 

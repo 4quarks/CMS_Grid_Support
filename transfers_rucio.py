@@ -1,12 +1,11 @@
 import logging
-from constants import CteFTS as CteFTS
+from constants import CteFTS
 import time
 from copy import deepcopy
 from abc import ABC
 import re
-from mongotools import MongoDB
 import pandas as pd
-from query_utils import AbstractQueries, get_lfn_and_short_pfn, group_data, Time
+from query_utils import AbstractQueries, Time
 import xlsxwriter
 
 """
@@ -106,8 +105,6 @@ class Transfers(AbstractQueries, ABC):
         black_pfn = [black_pfn for black_pfn in BLACKLIST_PFN if black_pfn in src_url or black_pfn in dest_url]
         return black_pfn
 
-
-
     def get_user(self, url_pfn):
         user = ""
         raw_users = re.findall("/user/(.*)/", str(url_pfn))
@@ -129,8 +126,9 @@ class Transfers(AbstractQueries, ABC):
         ############ CONSTRUCT THE QUERY ############
         kibana_query_failed = "data.vo:cms AND data.event_type:{}".format("transfer-failed")
         if hostname:
-            kibana_query_failed += CteFTS.ADD_DATA.format(direction, hostname)
-        # If an error is specified --> add filter on the query
+            kibana_query_failed += CteFTS.ADD_DATA.format(direction + "_url", hostname)
+        if site:
+            kibana_query_failed += CteFTS.ADD_DATA.format(direction + "_rse", site)
         if filter_error_kibana:
             kibana_query_failed += CteFTS.ADD_DATA.format(CteFTS.REF_LOG, filter_error_kibana)
 
@@ -143,12 +141,12 @@ class Transfers(AbstractQueries, ABC):
         Get json with all the errors grouped by: host, destination/origin, type of error
         """
         all_data = {}
-
+        self.site = site
         data_host = {}
         ############ GET DATA ORIGIN AND DESTINATION ############
-        for direction in ["s", "d"]:
+        for direction in ["src", "dst"]:
             time.sleep(0.1)
-            response_kibana = self.build_query_get_response(hostname, direction=direction,
+            response_kibana = self.build_query_get_response(direction, site=site, hostname=hostname,
                                                             filter_error_kibana=filter_error_kibana)
             ############ GROUP DATA BY ERRORS ############
             grouped_by_error = {}
@@ -162,12 +160,17 @@ class Transfers(AbstractQueries, ABC):
                 # Extract useful data
                 if CteFTS.REF_LOG in error_data.keys() and not in_blacklist:
                     ############ ADD EXTRA DATA ############
-                    src_lfn, _ = get_lfn_and_short_pfn(src_url)
+                    src_lfn = get_lfn_and_short_pfn(src_url)
                     dst_lfn, _ = get_lfn_and_short_pfn(dst_url)
-                    error_data.update({CteFTS.REF_LFN_SRC: src_lfn, CteFTS.REF_LFN_DST: dst_lfn})
+                    src_protocol = src_url.split("/")[0].strip(":").strip()
+                    dst_protocol = dst_url.split("/")[0].strip(":").strip()
+
+                    name = error_data['name']
+                    error_data.update({CteFTS.REF_LFN_SRC: src_lfn, CteFTS.REF_LFN_DST: dst_lfn, 'name': name,
+                                       "src_protocol":src_protocol, "dst_protocol":dst_protocol})
                     # Clean se
-                    error_data[CteFTS.REF_SE_SRC] = error_data[CteFTS.REF_SE_SRC].split("/")[-1]
-                    error_data[CteFTS.REF_SE_DST] = error_data[CteFTS.REF_SE_DST].split("/")[-1]
+                    error_data[CteFTS.REF_SE_SRC] = error_data[CteFTS.REF_PFN_SRC].split("/")[2]
+                    error_data[CteFTS.REF_SE_DST] = error_data[CteFTS.REF_PFN_DST].split("/")[2]
                     ############ GROUP THE ERROR ############
                     grouped_by_error = group_data(grouped_by_error, error_data,
                                                   [CteFTS.REF_PFN_SRC, CteFTS.REF_PFN_DST], CteFTS)
@@ -210,15 +213,20 @@ class Transfers(AbstractQueries, ABC):
         f.close()
 
     def results_to_csv(self, dict_results, write_lfns=False):
-
-        columns = [CteFTS.REF_TIMESTAMP, CteFTS.REF_TIMESTAMP_HR, CteFTS.REF_LOG,
-                   CteFTS.REF_SE_SRC, CteFTS.REF_SE_DST, CteFTS.REF_PFN_SRC, CteFTS.REF_PFN_DST, CteFTS.REF_LFN_SRC,
-                   CteFTS.REF_LFN_DST, CteFTS.REF_NUM_ERRORS, CteFTS.REF_JOB_ID, CteFTS.REF_FILE_ID]
+        columns = ['src_rse', 'src_type', 'src_se', 'src_url', 'src_lfn', 'src_protocol',
+                   'dst_rse', 'dst_type', 'dst_se', 'dst_url', 'dst_lfn', 'dst_protocol',
+                   'transfer_id', 'checksum_adler', 'file_size', 'transfer_link',
+                   'submitted_at', 'started_at', 'transferred_at', 'purged_reason']
+        # columns = ["activity", CteFTS.REF_LOG, "src_rse", "dst_rse", CteFTS.REF_SE_SRC, CteFTS.REF_SE_DST,
+        #            CteFTS.REF_PFN_SRC,
+        #            CteFTS.REF_PFN_DST, CteFTS.REF_LFN_SRC,
+        #            CteFTS.REF_LFN_DST, "name", "file_size", "checksum_adler", CteFTS.REF_NUM_ERRORS, CteFTS.REF_JOB_ID,
+        #            CteFTS.REF_FILE_ID]
 
         ############  ITERATE OVER ALL SRMs HOSTS ############
         for storage_element, se_value in dict_results.items():
             time_analysis = round(time.time())
-            host_analysis = storage_element.replace(".", "-")
+            host_analysis = self.site
             file_name = '{}_{}'.format(time_analysis, host_analysis)
             writer = pd.ExcelWriter(file_name + ".xlsx", engine='xlsxwriter')
             ############ GET DATA ORIGIN AND DESTINATION ############
@@ -328,39 +336,82 @@ class Transfers(AbstractQueries, ABC):
             writer.save()
 
 
+class AbstractNLP:
+    def __init__(self, raw_text):
+        self.raw_text = raw_text
+        self.clean_text = self.preprocess_string_nlp(raw_text)
+
+    def preprocess_string_nlp(self, text):
+        return text.lower().strip()
+
+
+class TextNLP(AbstractNLP):
+    def __init__(self, raw_text, ref_keywords_clean):
+        super().__init__(raw_text)
+        self.ref_keywords_clean = ref_keywords_clean
+
+    def get_keyword(self, clean_text):
+        keywords_value = None
+        keywords = [elem for elem in self.ref_keywords_clean if elem in clean_text]
+        # We should not have more than 2 keywords in one error
+        if len(keywords) > 1:
+            print('ERROR! {}, {}'.format(keywords, clean_text))
+            keywords_value = keywords[1]
+        if keywords:
+            keywords_value = keywords[0]
+        return keywords_value
+
+
+def group_data(grouped_by_error, error_data, list_same_ref, constants):
+    ############ ADD EXTRA INFO ############
+    error_log = error_data[constants.REF_LOG]
+    error_data.update({constants.REF_NUM_ERRORS: 1})
+
+    ########### DETECT KEYWORDS ###########
+    error_nlp = TextNLP(error_log, CteFTS.KEYWORDS_ERRORS)
+    previous_errors = list(grouped_by_error.keys())
+    keyword = error_nlp.get_keyword(error_nlp.clean_text)
+    if keyword:
+        error_ref = keyword
+    else:
+        error_ref = error_log
+    ############ CHOOSE REFERENCE ############
+
+    if keyword not in previous_errors and error_log not in previous_errors:
+        # If the error was not grouped --> add
+        grouped_by_error.update({error_ref: [error_data]})
+    else:
+        # If the error match with another --> count repetition
+        exactly_same_error = False
+        # EXACT SAME ERROR REPEATED --> num_errors + 1
+
+        for idx, element in enumerate(grouped_by_error[error_ref]):
+            # SAME ERROR & SAME PFN --> SAME ISSUE
+            for reference in list_same_ref:
+                if element[reference] == error_data[reference]:
+                    exactly_same_error = True
+                else:
+                    exactly_same_error = False
+            if exactly_same_error:
+                grouped_by_error[error_ref][idx][CteFTS.REF_NUM_ERRORS] += 1
+                break
+        if not exactly_same_error:
+            grouped_by_error[error_ref].append(error_data)
+    return grouped_by_error
+
+
+def get_lfn_and_short_pfn(raw_pfn):
+    lfn, reduced_pfn = "", ""
+    if "/store" in raw_pfn:
+        lfn = "/store" + raw_pfn.split("/store")[1]
+        reduced_pfn = raw_pfn.split("/store")[0]
+    return lfn, reduced_pfn
+
+
 if __name__ == "__main__":
-    time_class = Time(hours=24)
+    time_class = Time(hours=12)
     fts = Transfers(time_class)
-    BLACKLIST_PFN = ["se3.itep.ru", "LoadTest"]
+    BLACKLIST_PFN = ["se3.itep.ru", "se01.indiacms.res.in", "cmsio.rc.ufl.edu"]
     dict_result = fts.analyze_site(site="T0_CH_CERN")
-    fts.results_to_csv(dict_result, write_lfns=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    # dict_result = fts.analyze_site(hostname="srm-cms.gridpp.rl.ac.uk")
+    fts.results_to_csv(dict_result, write_lfns=False)

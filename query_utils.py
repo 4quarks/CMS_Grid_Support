@@ -219,8 +219,7 @@ class TextNLP (AbstractNLP):
 def group_data(grouped_by_error, error_data, list_same_ref, constants):
     ############ ADD EXTRA INFO ############
     error_log = error_data[constants.REF_LOG]
-    timestamp_hr = timestamp_to_human_utc(error_data[constants.REF_TIMESTAMP])
-    error_data.update({constants.REF_NUM_ERRORS: 1, constants.REF_TIMESTAMP_HR: timestamp_hr})
+    error_data.update({constants.REF_NUM_ERRORS: 1})
 
     ########### DETECT KEYWORDS ###########
     error_nlp = TextNLP(error_log, constants.KEYWORDS_ERRORS)

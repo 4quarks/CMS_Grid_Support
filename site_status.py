@@ -4,7 +4,7 @@ from constants import CteSAM as CteSAM
 import pandas as pd
 import time
 from abc import ABC
-from query_utils import AbstractQueries, group_data, Time
+from query_utils import AbstractQueries, group_data, Time, timestamp_to_human_utc
 from copy import deepcopy
 
 """
@@ -173,6 +173,9 @@ class AbstractSiteStatus(AbstractQueries, ABC):
                                     if CteSAM.REF_LOG in error[CteSAM.REF_DATA].keys():
                                         ############ GROUP THE ERROR ############
                                         error_data = deepcopy(error[CteSAM.REF_DATA])
+                                        timestamp_hr = timestamp_to_human_utc(error_data[CteSAM.REF_TIMESTAMP])
+                                        error_data.update({CteSAM.REF_TIMESTAMP_HR: timestamp_hr})
+
                                         grouped_by_error = group_data(grouped_by_error, error_data, ['metric_name'], CteSAM)
                                 for error_grouped, value_error in grouped_by_error.items():
                                     for single_error in value_error:
