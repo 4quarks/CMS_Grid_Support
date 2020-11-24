@@ -175,8 +175,8 @@ def group_data(grouped_by_error, error_data, list_same_ref):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("hours", help="Number of hours to analyze", type=int)
-    parser.add_argument("black", help="Blacklisted elements separated by /", type=str)
     parser.add_argument("target", help="Site or hostname to analyze", type=str)
+    parser.add_argument("--black", help="Blacklisted elements separated by '/'", type=str)
     parser.add_argument("--write_lfns", help="Write files with all LFNS", action="store_true")
     parser.add_argument("--error", help="Keywords to search on the error log (separate by dots '.')", type=str)
     args = parser.parse_args()

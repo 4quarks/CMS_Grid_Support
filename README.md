@@ -1,42 +1,142 @@
-# CMS_Grid_Support
-Tools too speed monitoring in CMS 
 
+<!-- [![Contributors][contributors-shield]][contributors-url]
+[![Forks][forks-shield]][forks-url]
+[![Stargazers][stars-shield]][stars-url]
+[![Issues][issues-shield]][issues-url]
+[![MIT License][license-shield]][license-url]
+[![LinkedIn][linkedin-shield]][linkedin-url]-->
+
+
+
+<!-- PROJECT LOGO -->
+<br />
+<p align="center">
+  <a href="https://github.com/4quarks/CMS_Grid_Support">
+    <img src="images/index.jpeg" alt="Logo" width="80" height="80">
+  </a>
+
+  <h3 align="center">CMS Site Support</h3>
+
+  <p align="center">
+    Tools to accelerate monitoring in the CMS computing grid
+    <br />
+    <a href="https://github.com/4quarks/CMS_Grid_Support/blob/main/Documents"><strong>Explore the docs »</strong></a>
+    <br />
+    <br />
+    <a href="#usage">View Demo</a>
+    ·
+    <a href="https://github.com/4quarks/CMS_Grid_Support/issues">Report Bug</a>
+    ·
+    <a href="https://github.com/4quarks/CMS_Grid_Support/milestones">Request Feature</a>
+  </p>
+</p>
+
+
+
+<!-- TABLE OF CONTENTS -->
+<details open="open">
+  <summary>Table of Contents</summary>
+  <ol>
+    <li>
+      <a href="#about-the-project">About The Project</a>
+      <ul>
+        <li><a href="#built-with">Built With</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#getting-started">Getting Started</a>
+      <ul>
+        <li><a href="#prerequisites">Prerequisites</a></li>
+        <li><a href="#installation">Installation</a></li>
+      </ul>
+    </li>
+    <li><a href="#usage">Usage</a></li>
+    <li><a href="#roadmap">Roadmap</a></li>
+    <li><a href="#contributing">Contributing</a></li>
+    <li><a href="#license">License</a></li>
+    <li><a href="#acknowledgements">Acknowledgements</a></li>
+  </ol>
+</details>
+
+
+
+<!-- ABOUT THE PROJECT -->
+## About The Project
+
+<!-- [![Product Name Screen Shot][product-screenshot]](https://example.com) -->
+We developed a collection of scripts for developers and site admins. 
+The main purpose is to reduce the monitoring time consuming and empowering utilities to assist sites.
+Furthermore, collect errors information for analysis purposes. 
+
+### Built With
+The main technologies used on this project are:
+* [Python 3](https://www.python.org/)
+* [ElasticSearch](https://www.elastic.co/)
+
+<!-- GETTING STARTED -->
 ## Getting Started
 
+To get a local copy up and running follow these simple example steps.
+
 ### Prerequisites
-- Python 3
-- Grafana key to query ElasticSearch. e.g. "Bearer FNJZ0gyS..." 
 
-### Mandatory installation
+This is an example of how to list things you need to use the software and how to install them.
+* Python 3
+  ```sh
+  python ––version
+  sudo apt install python3
+  ```
+* Grafana key to query ElasticSearch. e.g. "Bearer FNJZ0gyS..." 
 
-TODO on the command line:
+### Installation
 
-- Clone repo:
-```
-$ git clone git@github.com:paucutrina/CMS_Grid_Support.git
-```
-- Setup virtual environment
-```
-$ cd CMS_Grid_Support
-$ sudo apt-get install python3-venv
-$ python3 -m venv venv
-$ source venv/bin/activate
-```
-- Install Python libraries on the venv:
-```
-$ pip install -r requirements.txt
-```
-#### Add environmental variables:
-```
-$ export GRAFANA_KEY="Bearer FNJZ0gyS..."
-```
-## Execute Rucio analysis
+1. Get a free API Key at [https://example.com](https://example.com)
+2. Clone the repo
+   ```shell script
+   $ git clone git@github.com:paucutrina/CMS_Grid_Support.git
+   ```
+3. Setup virtual environment
+    ```shell script
+    $ cd CMS_Grid_Support
+    $ sudo apt-get install python3-venv
+    $ python3 -m venv venv
+    $ source venv/bin/activate
+    ```
+4. Install Python libraries listed on the `requirements.txt`
+   ```shell script
+   $ pip install -r requirements.txt
+   ```
+5. Add environmental variables:
+    ```shell script
+    $ export GRAFANA_KEY="Bearer FNJZ0gyS..."
+    ```
+
+<!-- USAGE EXAMPLES -->
+## Usage
+To see the required/optional arguments:
 ```
 $ python transfers_rucio.py -h
-$ python transfers_rucio.py 24 se3.itep.ru/se01.indiacms.res.in/cmsio.rc.ufl.edu T2_ES_IFCA --write_lfns --error No.such.file
 ```
-## Develpoment in progress...
-### Optional installation
+Here below you can see an example where:
+* 24: the analysis will contain the last 24h of information
+* T2_ES_IFCA: site that we are interested in. We could instead specify the hostname e.g. storm.ifca.es
+* --write_lfns: generate 
+* se3.itep.ru/tape/Checksum: all the PFNs that contains 
+```
+$ python transfers_rucio.py 24 se3.itep.ru/tape/Checksum T2_ES_IFCA --write_lfns --error No.such.file
+```
+
+
+<!-- ROADMAP -->
+## Roadmap
+
+See the [milestones](https://github.com/4quarks/CMS_Grid_Support/milestones) for a list of proposed features.
+You can also see the known [issues](https://github.com/4quarks/CMS_Grid_Support/issues). 
+If you have suggestions, please, do not hesitate to create new milestones and report issues! 
+
+#### Site Status 
+This is still under development but is already possible to get a full report of the sites' computing resources.
+
 - Install mongodb e.g. Ubuntu:
 ```
 wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | sudo apt-key add -
@@ -50,23 +150,55 @@ echo "mongodb-org-mongos hold" | sudo dpkg --set-selections
 echo "mongodb-org-tools hold" | sudo dpkg --set-selections
 sudo systemctl start mongod
 sudo systemctl status mongod
-export MONGODB_HOST="localhost:27017"
 mongo
+export MONGODB_HOST="localhost:27017"
 ```
 - Download NLP model:
 ```
 python -m spacy download en_core_web_lg
 ```
-## First steps to execute FTS analysis
 1. Run vofeed.py to dump all data to mongodb
-2. Select the time scope of your search. e.g. Time(hours=24)
-3. Define the elements that you do not want to find on the source/destination URL. e.g. BLACKLIST_PFN = ["se3.itep.ru", "LoadTest"] 
-4. Introduce the site name or the host name. e.g. fts.analyze_site(site="T2_HU_Budapest")
-5. Run transfers.py
-
-## First steps to execute Site Status analysis
-1. Run vofeed.py to dump all data to mongodb
-2. Define the sites that you are not interested in. e.g. BLACKLIST_SITES = ["T2_PL_Warsaw", "T2_RU_ITEP"]
+2. Define the sites that you are not interested in. e.g. BLACKLIST_SITES = ["T2_PL_Warsaw"]
 3. Introduce site or the scope to analyze. AbstractSiteStatus(time_ss, site="T1|T2")
 4. Run site_status.py
 
+
+<!-- CONTRIBUTING -->
+## Contributing
+
+Contributions are what make the open source community such an amazing place to be learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+
+
+<!-- LICENSE -->
+## License
+
+Distributed under the MIT License. See `LICENSE` for more information.
+
+<!-- ACKNOWLEDGEMENTS -->
+## Acknowledgements
+* [FTSmon](https://fts3.cern.ch:8449/fts3/ftsmon/#/)
+* [MonIT Kibana](https://monit-kibana.cern.ch)
+
+
+<!-- MARKDOWN LINKS & IMAGES -->
+<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
+<!-- [contributors-url]: https://github.com/4quarks/CMS_Grid_Support/graphs/contributors
+[contributors-shield]: https://img.shields.io/github/contributors/othneildrew/Best-README-Template.svg?style=for-the-badge
+[forks-shield]: https://img.shields.io/github/forks/othneildrew/Best-README-Template.svg?style=for-the-badge
+[forks-url]: https://github.com/othneildrew/Best-README-Template/network/members
+[stars-shield]: https://img.shields.io/github/stars/othneildrew/Best-README-Template.svg?style=for-the-badge
+[stars-url]: https://github.com/othneildrew/Best-README-Template/stargazers
+[issues-shield]: https://img.shields.io/github/issues/othneildrew/Best-README-Template.svg?style=for-the-badge
+[issues-url]: https://github.com/othneildrew/Best-README-Template/issues
+[license-shield]: https://img.shields.io/github/license/othneildrew/Best-README-Template.svg?style=for-the-badge
+[license-url]: https://github.com/othneildrew/Best-README-Template/blob/master/LICENSE.txt
+[linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
+[linkedin-url]: https://linkedin.com/in/othneildrew
+[product-screenshot]: images/screenshot.png -->
