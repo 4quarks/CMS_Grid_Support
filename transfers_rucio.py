@@ -1,12 +1,11 @@
 import logging
-from constants import CteFTS as CteFTS
+from constants import CteRucio
 import time
 from copy import deepcopy
 from abc import ABC
 import re
-from mongotools import MongoDB
 import pandas as pd
-from query_utils import AbstractQueries, get_lfn_and_short_pfn, group_data, Time
+from query_utils import AbstractQueries, Time
 import xlsxwriter
 
 """
@@ -74,14 +73,14 @@ class Status:
     finished = "FINISHED"
 
 def join_attribute_and_expression(self, attr, expression):
-    return CteFTS.AND + attr + CteFTS.EXPRESSION.format(CteFTS.INCLUDED.format(expression))
+    return CteRucio.AND + attr + CteRucio.EXPRESSION.format(CteRucio.INCLUDED.format(expression))
 
 def get_query(self, dst_url="", dst_protocol="", src_url="", src_protocol="", status="", reason=""):
     raw_query = "data.vo:cms"
     if dst_url:
         raw_query += self.join_attribute_and_expression(self.attr_destination, dst_url)
     if status:
-        raw_query += CteFTS.AND + self.attr_status + status
+        raw_query += CteRucio.AND + self.attr_status + status
 
     clean_str_query = get_str_lucene_query(self.index['name'], self.time_slot[0], self.time_slot[1], raw_query)
     return clean_str_query
@@ -93,8 +92,8 @@ https://monit-kibana.cern.ch/kibana/goto/31129642d019649a5fe8ee3c816677e6
 class Transfers(AbstractQueries, ABC):
     def __init__(self, time_class):
         super().__init__(time_class)
-        self.index_name = CteFTS.INDEX_ES
-        self.index_id = CteFTS.INDEX_ES_ID
+        self.index_name = CteRucio.INDEX_ES
+        self.index_id = CteRucio.INDEX_ES_ID
 
     def is_blacklisted(self, src_url, dest_url):
         """
@@ -105,8 +104,6 @@ class Transfers(AbstractQueries, ABC):
         """
         black_pfn = [black_pfn for black_pfn in BLACKLIST_PFN if black_pfn in src_url or black_pfn in dest_url]
         return black_pfn
-
-
 
     def get_user(self, url_pfn):
         user = ""
@@ -129,48 +126,58 @@ class Transfers(AbstractQueries, ABC):
         ############ CONSTRUCT THE QUERY ############
         kibana_query_failed = "data.vo:cms AND data.event_type:{}".format("transfer-failed")
         if hostname:
-            kibana_query_failed += CteFTS.ADD_DATA.format(direction, hostname)
-        # If an error is specified --> add filter on the query
+            kibana_query_failed += CteRucio.ADD_DATA.format(direction + "_url", hostname)
+        if site:
+            kibana_query_failed += CteRucio.ADD_DATA.format(direction + "_rse", site)
         if filter_error_kibana:
-            kibana_query_failed += CteFTS.ADD_DATA.format(CteFTS.REF_LOG, filter_error_kibana)
+            kibana_query_failed += CteRucio.ADD_DATA.format(CteRucio.REF_LOG, filter_error_kibana)
 
         ############ QUERY TO ELASTICSEARCH ############
         response_failed = self.get_direct_response(kibana_query=kibana_query_failed, max_results=10000)
         return response_failed
 
-    def analyze_site(self, site="", hostname="", filter_error_kibana=""):
+    def analyze_site(self, site_or_host = "", filter_error_kibana=""):
         """
         Get json with all the errors grouped by: host, destination/origin, type of error
         """
-        all_data = {}
-
-        data_host = {}
+        all_data, data_host = {}, {}
+        site, hostname = "", ""
+        if site_or_host:
+            if "T" in site_or_host[0]:
+                site = site_or_host
+            else:
+                hostname = site_or_host
         ############ GET DATA ORIGIN AND DESTINATION ############
-        for direction in ["s", "d"]:
+        for direction in ["src", "dst"]:
             time.sleep(0.1)
-            response_kibana = self.build_query_get_response(hostname, direction=direction,
+            response_kibana = self.build_query_get_response(direction, site=site, hostname=hostname,
                                                             filter_error_kibana=filter_error_kibana)
             ############ GROUP DATA BY ERRORS ############
             grouped_by_error = {}
             ############ ITERATE OVER ALL ERRORS ############
             for error in response_kibana:
-                error_data = deepcopy(error[CteFTS.REF_DATA])
-                src_url = error_data[CteFTS.REF_PFN_SRC]
-                dst_url = error_data[CteFTS.REF_PFN_DST]
+                error_data = deepcopy(error[CteRucio.REF_DATA])
+                src_url = error_data[CteRucio.REF_PFN_SRC]
+                dst_url = error_data[CteRucio.REF_PFN_DST]
                 ############ AVOID ERRORS THAT ARE BLACKLISTED ############ç
                 in_blacklist = self.is_blacklisted(src_url, dst_url)
                 # Extract useful data
-                if CteFTS.REF_LOG in error_data.keys() and not in_blacklist:
+                if CteRucio.REF_LOG in error_data.keys() and not in_blacklist:
                     ############ ADD EXTRA DATA ############
-                    src_lfn, _ = get_lfn_and_short_pfn(src_url)
+                    src_lfn = get_lfn_and_short_pfn(src_url)
                     dst_lfn, _ = get_lfn_and_short_pfn(dst_url)
-                    error_data.update({CteFTS.REF_LFN_SRC: src_lfn, CteFTS.REF_LFN_DST: dst_lfn})
+                    src_protocol = src_url.split("/")[0].strip(":").strip()
+                    dst_protocol = dst_url.split("/")[0].strip(":").strip()
+
+                    name = error_data['name']
+                    error_data.update({CteRucio.REF_LFN_SRC: src_lfn, CteRucio.REF_LFN_DST: dst_lfn, 'name': name,
+                                       "src_protocol": src_protocol, "dst_protocol": dst_protocol})
                     # Clean se
-                    error_data[CteFTS.REF_SE_SRC] = error_data[CteFTS.REF_SE_SRC].split("/")[-1]
-                    error_data[CteFTS.REF_SE_DST] = error_data[CteFTS.REF_SE_DST].split("/")[-1]
+                    error_data[CteRucio.REF_SE_SRC] = error_data[CteRucio.REF_PFN_SRC].split("/")[2]
+                    error_data[CteRucio.REF_SE_DST] = error_data[CteRucio.REF_PFN_DST].split("/")[2]
                     ############ GROUP THE ERROR ############
                     grouped_by_error = group_data(grouped_by_error, error_data,
-                                                  [CteFTS.REF_PFN_SRC, CteFTS.REF_PFN_DST], CteFTS)
+                                                  [CteRucio.REF_PFN_SRC, CteRucio.REF_PFN_DST], CteRucio)
             if grouped_by_error:
                 data_host.update({direction: grouped_by_error})
         all_data.update({hostname: data_host})
@@ -210,15 +217,18 @@ class Transfers(AbstractQueries, ABC):
         f.close()
 
     def results_to_csv(self, dict_results, write_lfns=False):
+        src_dst_info = ["rse", "type", "se", "url", "lfn", "protocol"]
+        expanded_src_dst_info = []
+        [expanded_src_dst_info.append(direction + "_" + info) for direction in ["src", "dst"] for info in src_dst_info]
+        file_info = ['transfer_id', 'checksum_adler', 'file_size', 'transfer_link',
+                     'submitted_at', 'started_at', 'transferred_at', 'purged_reason']
 
-        columns = [CteFTS.REF_TIMESTAMP, CteFTS.REF_TIMESTAMP_HR, CteFTS.REF_LOG,
-                   CteFTS.REF_SE_SRC, CteFTS.REF_SE_DST, CteFTS.REF_PFN_SRC, CteFTS.REF_PFN_DST, CteFTS.REF_LFN_SRC,
-                   CteFTS.REF_LFN_DST, CteFTS.REF_NUM_ERRORS, CteFTS.REF_JOB_ID, CteFTS.REF_FILE_ID]
+        columns = expanded_src_dst_info + file_info
 
         ############  ITERATE OVER ALL SRMs HOSTS ############
         for storage_element, se_value in dict_results.items():
             time_analysis = round(time.time())
-            host_analysis = storage_element.replace(".", "-")
+            host_analysis = "EOEOEO"
             file_name = '{}_{}'.format(time_analysis, host_analysis)
             writer = pd.ExcelWriter(file_name + ".xlsx", engine='xlsxwriter')
             ############ GET DATA ORIGIN AND DESTINATION ############
@@ -227,18 +237,16 @@ class Transfers(AbstractQueries, ABC):
                 group_id = 1
                 users, endpoints, lfns = {}, {}, {}
                 if "s" == direction[0]:
-                    other_direction = CteFTS.REF_SE_DST
-                    other_url_direction = CteFTS.REF_PFN_DST
-                    other_lfn = CteFTS.REF_LFN_DST
-                    same_url_direction = CteFTS.REF_PFN_SRC
-                    same_lfn = CteFTS.REF_LFN_SRC
+                    other_direction = CteRucio.REF_SE_DST
+                    other_url_direction = CteRucio.REF_PFN_DST
+                    same_url_direction = CteRucio.REF_PFN_SRC
+                    same_lfn = CteRucio.REF_LFN_SRC
 
                 else:
-                    other_direction = CteFTS.REF_SE_SRC
-                    other_url_direction = CteFTS.REF_PFN_SRC
-                    same_url_direction = CteFTS.REF_PFN_DST
-                    other_lfn = CteFTS.REF_LFN_SRC
-                    same_lfn = CteFTS.REF_LFN_DST
+                    other_direction = CteRucio.REF_SE_SRC
+                    other_url_direction = CteRucio.REF_PFN_SRC
+                    same_url_direction = CteRucio.REF_PFN_DST
+                    same_lfn = CteRucio.REF_LFN_DST
 
                 ############  ITERATE OVER ALL ERROR GROUPS ############
                 for error_key, error_value in direction_value.items():
@@ -252,7 +260,7 @@ class Transfers(AbstractQueries, ABC):
                         user_site = self.get_user(single_error[same_url_direction])
                         user_other = self.get_user(single_error[other_url_direction])
                         if user_site:
-                            users[group_id] += [user_site] * single_error[CteFTS.REF_NUM_ERRORS]
+                            users[group_id] += [user_site] * single_error[CteRucio.REF_NUM_ERRORS]
                             if user_other and user_site != user_other:
                                 logging.error("Different users {} vs {}".format(user_site, user_other))
                             if user_site not in list_users:
@@ -260,7 +268,7 @@ class Transfers(AbstractQueries, ABC):
 
                         # ADD ENDPOINT IN LIST
                         other_endpoint = single_error[other_direction]
-                        endpoints[group_id] += [other_endpoint] * single_error[CteFTS.REF_NUM_ERRORS]
+                        endpoints[group_id] += [other_endpoint] * single_error[CteRucio.REF_NUM_ERRORS]
                         if other_endpoint not in list_other_endpoint:
                             list_other_endpoint.append(other_endpoint)
 
@@ -275,7 +283,7 @@ class Transfers(AbstractQueries, ABC):
                         # Row errors table
                         list_errors.append(values_columns)
                         # Count total of failed transfers for each group
-                        failed_transfers += single_error[CteFTS.REF_NUM_ERRORS]
+                        failed_transfers += single_error[CteRucio.REF_NUM_ERRORS]
 
                     # Row table (legend) group errors
                     list_groups.append([group_id, error_key, len(error_value), failed_transfers])
@@ -287,7 +295,7 @@ class Transfers(AbstractQueries, ABC):
                     self.write_lfn_txt(lfns_file_name, lfns)
 
                 # DF ERRORS
-                columns_errors = columns + [CteFTS.REF_USER, "group_id"]
+                columns_errors = columns + [CteRucio.REF_USER, "group_id"]
                 num_columns_error = len(columns_errors)
                 df = pd.DataFrame(list_errors, columns=columns_errors)
                 df.to_excel(writer, sheet_name=direction, index=False)
@@ -295,7 +303,7 @@ class Transfers(AbstractQueries, ABC):
 
                 # DF LEGEND GROUPS
                 columns_groups = ["group_id", "error_ref", "num_diff_errors", "num_failed_transfers"]
-                start_column = num_columns_error + CteFTS.SEPARATION_COLUMNS
+                start_column = num_columns_error + CteRucio.SEPARATION_COLUMNS
                 df_group = pd.DataFrame(list_groups, columns=columns_groups)
                 df_group.to_excel(writer, sheet_name=direction, startcol=start_column, index=False)
                 column_id_group = self.get_column_id(len(list_groups), start_column + 1)
@@ -303,8 +311,8 @@ class Transfers(AbstractQueries, ABC):
                 # DF USERS
                 list_group_users = self.get_sub_table(users, list_users)
                 columns_users = ["group_id"] + list_users
-                start_column = num_columns_error + CteFTS.SEPARATION_COLUMNS
-                start_row_users = len(list_groups) + CteFTS.SEPARATION_ROWS
+                start_column = num_columns_error + CteRucio.SEPARATION_COLUMNS
+                start_row_users = len(list_groups) + CteRucio.SEPARATION_ROWS
                 if list_group_users:
                     df_users = pd.DataFrame(list_group_users, columns=columns_users)
                     df_users.to_excel(writer, sheet_name=direction, startcol=start_column, startrow=start_row_users,
@@ -313,8 +321,8 @@ class Transfers(AbstractQueries, ABC):
                 # DF ENDPOINTS
                 list_group_endpoints = self.get_sub_table(endpoints, list_other_endpoint)
                 columns_endpoints = ["group_id"] + list_other_endpoint
-                start_column = num_columns_error + CteFTS.SEPARATION_COLUMNS
-                start_row = start_row_users + len(list_group_users) + CteFTS.SEPARATION_ROWS
+                start_column = num_columns_error + CteRucio.SEPARATION_COLUMNS
+                start_row = start_row_users + len(list_group_users) + CteRucio.SEPARATION_ROWS
                 if list_group_endpoints:
                     df_endpoint = pd.DataFrame(list_group_endpoints, columns=columns_endpoints)
                     df_endpoint.to_excel(writer, sheet_name=direction, startcol=start_column, startrow=start_row,
@@ -328,39 +336,102 @@ class Transfers(AbstractQueries, ABC):
             writer.save()
 
 
+class AbstractNLP:
+    def __init__(self, raw_text):
+        self.raw_text = raw_text
+        self.clean_text = self.preprocess_string_nlp(raw_text)
+
+    def preprocess_string_nlp(self, text):
+        return text.lower().strip()
+
+
+class TextNLP(AbstractNLP):
+    def __init__(self, raw_text, ref_keywords_clean):
+        super().__init__(raw_text)
+        self.ref_keywords_clean = ref_keywords_clean
+
+    def get_keyword(self, clean_text):
+        keywords_value = None
+        keywords = [elem for elem in self.ref_keywords_clean if elem in clean_text]
+        # We should not have more than 2 keywords in one error
+        if len(keywords) > 1:
+            print('ERROR! {}, {}'.format(keywords, clean_text))
+            keywords_value = keywords[1]
+        if keywords:
+            keywords_value = keywords[0]
+        return keywords_value
+
+
+def group_data(grouped_by_error, error_data, list_same_ref, constants):
+    ############ ADD EXTRA INFO ############
+    error_log = error_data[constants.REF_LOG]
+    error_data.update({constants.REF_NUM_ERRORS: 1})
+
+    ########### DETECT KEYWORDS ###########
+    error_nlp = TextNLP(error_log, CteRucio.KEYWORDS_ERRORS)
+    previous_errors = list(grouped_by_error.keys())
+    keyword = error_nlp.get_keyword(error_nlp.clean_text)
+    if keyword:
+        error_ref = keyword
+    else:
+        error_ref = error_log
+    ############ CHOOSE REFERENCE ############
+
+    if keyword not in previous_errors and error_log not in previous_errors:
+        # If the error was not grouped --> add
+        grouped_by_error.update({error_ref: [error_data]})
+    else:
+        # If the error match with another --> count repetition
+        exactly_same_error = False
+        # EXACT SAME ERROR REPEATED --> num_errors + 1
+
+        for idx, element in enumerate(grouped_by_error[error_ref]):
+            # SAME ERROR & SAME PFN --> SAME ISSUE
+            for reference in list_same_ref:
+                if element[reference] == error_data[reference]:
+                    exactly_same_error = True
+                else:
+                    exactly_same_error = False
+            if exactly_same_error:
+                grouped_by_error[error_ref][idx][CteRucio.REF_NUM_ERRORS] += 1
+                break
+        if not exactly_same_error:
+            grouped_by_error[error_ref].append(error_data)
+    return grouped_by_error
+
+
+def get_lfn_and_short_pfn(raw_pfn):
+    lfn, reduced_pfn = "", ""
+    if "/store" in raw_pfn:
+        lfn = "/store" + raw_pfn.split("/store")[1]
+        reduced_pfn = raw_pfn.split("/store")[0]
+    return lfn, reduced_pfn
+
+
 if __name__ == "__main__":
-    time_class = Time(hours=24)
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("hours", help="Number of hours to analyze", type=int)
+    parser.add_argument("black", help="Blacklisted elements separated by /", type=str)
+    parser.add_argument("site", help="Site/hostname to analyze", type=str)
+    parser.add_argument("--write_lfns", help="Write files with all LFNS", action="store_true")
+    args = parser.parse_args()
+    # print(args.echo)
+
+    time_class = Time(hours=args.hours)
     fts = Transfers(time_class)
-    BLACKLIST_PFN = ["se3.itep.ru", "LoadTest"]
-    dict_result = fts.analyze_site(site="T0_CH_CERN")
-    fts.results_to_csv(dict_result, write_lfns=True)
+    BLACKLIST_PFN = args.black.split("/")
+    dict_result = fts.analyze_site(site_or_host=args.site)
 
+    write_lfns = False
+    if args.write_lfns:
+        write_lfns = True
 
+    fts.results_to_csv(dict_result, write_lfns=write_lfns)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    # time_class = Time(hours=12)
+    # fts = Transfers(time_class)
+    # BLACKLIST_PFN = ["se3.itep.ru", "se01.indiacms.res.in", "cmsio.rc.ufl.edu"]
+    # dict_result = fts.analyze_site(site_or_host="T2_ES_IFCA")
+    # fts.results_to_csv(dict_result, write_lfns=False)

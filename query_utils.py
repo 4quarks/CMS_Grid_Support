@@ -158,6 +158,8 @@ class AbstractQueries(ABC):
         url = "https://monit-grafana.cern.ch/api/datasources/proxy/" + self.index_id + "/_msearch"
         headers = {'Content-Type': 'application/json', 'Authorization': os.environ["GRAFANA_KEY"]}
         raw_response = requests.request("POST", url, headers=headers, data=clean_query).text.encode('utf8')
+        if "Unauthorized" in str(raw_response):
+            raise Exception("Invalid Grafana Key, remember to export GRAFANA_KEY='Bearer FNJZ0gyS...'")
         json_response = json.loads(raw_response)
         response_clean = []
         if json_response:
@@ -219,8 +221,7 @@ class TextNLP (AbstractNLP):
 def group_data(grouped_by_error, error_data, list_same_ref, constants):
     ############ ADD EXTRA INFO ############
     error_log = error_data[constants.REF_LOG]
-    timestamp_hr = timestamp_to_human_utc(error_data[constants.REF_TIMESTAMP])
-    error_data.update({constants.REF_NUM_ERRORS: 1, constants.REF_TIMESTAMP_HR: timestamp_hr})
+    error_data.update({constants.REF_NUM_ERRORS: 1})
 
     ########### DETECT KEYWORDS ###########
     error_nlp = TextNLP(error_log, constants.KEYWORDS_ERRORS)
