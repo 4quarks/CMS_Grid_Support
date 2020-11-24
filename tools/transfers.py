@@ -1,12 +1,12 @@
 import logging
-from constants import CteFTS
+from utils.constants import CteFTS
 import time
 from copy import deepcopy
 from abc import ABC
 import re
-from mongotools import MongoDB
+from utils.mongotools import MongoDB
 import pandas as pd
-from query_utils import AbstractQueries, get_lfn_and_short_pfn, group_data, Time, timestamp_to_human_utc
+from utils.query_utils import AbstractQueries, get_lfn_and_short_pfn, group_data, Time, timestamp_to_human_utc
 import xlsxwriter
 
 """

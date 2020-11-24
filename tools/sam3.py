@@ -1,4 +1,4 @@
-from query_utils import *
+from utils.query_utils import *
 
 """
 data.details  OK: COMPLETED.<br>>>> ce05-htc.cr.cnaf.infn.it: ....

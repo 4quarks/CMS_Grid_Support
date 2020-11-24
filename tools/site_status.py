@@ -1,10 +1,10 @@
 from vofeed import VOFeed
 from sam3 import SAMTest
-from constants import CteSAM as CteSAM
+from utils.constants import CteSAM as CteSAM
 import pandas as pd
 import time
 from abc import ABC
-from query_utils import AbstractQueries, group_data, Time, timestamp_to_human_utc
+from utils.query_utils import AbstractQueries, group_data, Time, timestamp_to_human_utc
 from copy import deepcopy
 
 """

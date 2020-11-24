@@ -1,10 +1,10 @@
-from constants import CteRucio
+from utils.constants import CteRucio
 import time
 from copy import deepcopy
 from abc import ABC
-from query_utils import AbstractQueries, Time
+from utils.query_utils import AbstractQueries, Time
 import argparse
-from transfers_utils import ExcelGenerator, TextNLP
+from utils.transfers_utils import ExcelGenerator, TextNLP
 
 """
 ######################## monit_prod_cms_rucio_enr*  ########################

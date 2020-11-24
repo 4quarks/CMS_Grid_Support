@@ -41,6 +41,7 @@
       <a href="#about-the-project">About The Project</a>
       <ul>
         <li><a href="#built-with">Built With</a></li>
+        <li><a href="#structure">Structure</a></li>
       </ul>
     </li>
     <li>
@@ -72,6 +73,28 @@ Furthermore, collect errors information for analysis purposes.
 The main technologies used on this project are:
 * [Python 3](https://www.python.org/)
 * [ElasticSearch](https://www.elastic.co/)
+
+### Structure
+```
+├── LICENSE
+├── README.md
+├── requirements.txt
+└── tools
+    ├── __init__.py
+    ├── jobs.py
+    ├── sam3.py
+    ├── site_status.py
+    ├── transfers.py
+    ├── transfers_rucio.py
+    ├── utils
+    │   ├── constants.py
+    │   ├── __init__.py
+    │   ├── mongotools.py
+    │   ├── nlp_utils.py
+    │   ├── query_utils.py
+    │   └── transfers_utils.py
+    └── vofeed.py
+```
 
 <!-- GETTING STARTED -->
 ## Getting Started
@@ -113,18 +136,28 @@ This is an example of how to list things you need to use the software and how to
 
 <!-- USAGE EXAMPLES -->
 ## Usage
-To see the required/optional arguments:
+To see the further information:
 ```
 $ python transfers_rucio.py -h
 ```
-Here below you can see an example where:
-* 24: the analysis will contain the last 24h of information
-* T2_ES_IFCA: site that we are interested in. We could instead specify the hostname e.g. storm.ifca.es
-* --write_lfns: generate 
-* se3.itep.ru/tape/Checksum: all the PFNs that contains 
+Here below you can see an example:
 ```
 $ python transfers_rucio.py 24 se3.itep.ru/tape/Checksum T2_ES_IFCA --write_lfns --error No.such.file
 ```
+
+* Required arguments:
+```
+24: the analysis will contain the last 24h of information
+T2_ES_IFCA: site that we are interested in. We could instead specify the hostname e.g. storm.ifca.es
+```
+* Optional arguments:
+```
+--write_lfns: generate txt file with all LFNs grouped by error
+--error No.such.file: find one specific error (spaces should be ".")
+--black se3.itep.ru/tape/Checksum: blacklist keywords from PFNs 
+```
+
+
 
 
 <!-- ROADMAP -->

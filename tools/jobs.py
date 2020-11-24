@@ -1,4 +1,4 @@
-from query_utils import *
+from utils.query_utils import *
 from vofeed import VOFeed
 """
 data.CRAB_PostJobStatus  Running|failed|finished
