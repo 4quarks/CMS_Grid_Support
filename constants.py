@@ -29,8 +29,6 @@ class Constants:
     PERCENT_MIN_OK = 0.7  # 20 --> 14
     NUM_MIN_OK = int(HOURS_RANGE * NUM_TESTS_PER_HOUR * PERCENT_MIN_OK)
 
-
-class CteFTS(Constants):
     # TRANSFERS
     KEYWORDS_ERRORS = ['srm_authorization_failure', 'overwrite is not enabled', 'internal server error',
                            'no such file or directory', 'timeout of 360 seconds has been exceeded',
@@ -58,22 +56,31 @@ class CteFTS(Constants):
                            'system error in connect: connection timed out', 'invalid request descriptor',
                            'failed to deliver poolmgrselectwritepoolmsg', 'a system call failed: broken pipe',
                            'no free space on storage area', 'commands denied']
+
     REF_PFN_SRC = "src_url"
     REF_PFN_DST = "dst_url"
     REF_SE_SRC = "src_se"
     REF_SE_DST = "dst_se"
     REF_LFN_SRC = "src_lfn"
     REF_LFN_DST = "dst_lfn"
-    REF_LOG = "purged_reason" #"reason"
-    REF_JOB_ID = "transfer_id"# "job_id"
-    REF_FILE_ID = "transfer_id"#"file_id"
     REF_USER = "user"
 
-    # INDEX_ES = "monit_prod_fts_raw_*"
-    # INDEX_ES_ID = "9233"
+
+class CteRucio(Constants):
+    REF_LOG = "purged_reason"
+    REF_TRANSFER_ID = "transfer_id"
 
     INDEX_ES = "monit_prod_cms_rucio_enr*"
     INDEX_ES_ID = "9732"
+
+
+class CteFTS(Constants):
+    REF_LOG = "reason"
+    REF_JOB_ID = "job_id"
+    REF_FILE_ID = "file_id"
+
+    INDEX_ES = "monit_prod_fts_raw_*"
+    INDEX_ES_ID = "9233"
 
 
 class CteSAM(Constants):

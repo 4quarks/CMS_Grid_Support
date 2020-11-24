@@ -347,8 +347,8 @@ class Transfers(AbstractQueries, ABC):
 if __name__ == "__main__":
     time_class = Time(hours=24)
     fts = Transfers(time_class)
-    BLACKLIST_PFN = ["se3.itep.ru", "se01.indiacms.res.in", "cmsio.rc.ufl.edu", "cmsdcatape.fnal.gov"]
-    dict_result = fts.analyze_site(site="T2_DE_RWTH")
+    BLACKLIST_PFN = ["se3.itep.ru", "se01.indiacms.res.in", "cmsio.rc.ufl.edu"]
+    dict_result = fts.analyze_site(site="T2_ES_IFCA")
     fts.results_to_csv(dict_result, write_lfns=True)
 
 

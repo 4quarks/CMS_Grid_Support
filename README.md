@@ -46,8 +46,8 @@ mongo
 python -m spacy download en_core_web_lg
 ```
 ### Add environmental variables:
-- export MONGODB_HOST=localhost:27017
-- export GRAFANA_KEY=Bearer FNJZ0gyS...
+- export MONGODB_HOST="localhost:27017"
+- export GRAFANA_KEY="Bearer FNJZ0gyS..."
 
 e.g. in Pycharm https://stackoverflow.com/questions/42708389/how-to-set-environment-variables-in-pycharm
 ## First steps to execute FTS analysis

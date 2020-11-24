@@ -158,6 +158,8 @@ class AbstractQueries(ABC):
         url = "https://monit-grafana.cern.ch/api/datasources/proxy/" + self.index_id + "/_msearch"
         headers = {'Content-Type': 'application/json', 'Authorization': os.environ["GRAFANA_KEY"]}
         raw_response = requests.request("POST", url, headers=headers, data=clean_query).text.encode('utf8')
+        if "Unauthorized" in str(raw_response):
+            raise Exception("Invalid Grafana Key, remember to export GRAFANA_KEY='Bearer FNJZ0gyS...'")
         json_response = json.loads(raw_response)
         response_clean = []
         if json_response:
