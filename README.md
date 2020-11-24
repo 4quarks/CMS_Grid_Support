@@ -7,7 +7,7 @@ Tools too speed monitoring in CMS
 - Python 3
 - Grafana key to query ElasticSearch. e.g. "Bearer FNJZ0gyS..." 
 
-### Installing
+### Mandatory installation
 
 TODO on the command line:
 
@@ -26,6 +26,12 @@ source venv/bin/activate
 ```
 pip install -r requirements.txt
 ```
+#### Add environmental variables:
+```
+export GRAFANA_KEY="Bearer FNJZ0gyS..."
+```
+
+### Optional installation
 - Install mongodb e.g. Ubuntu:
 ```
 wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | sudo apt-key add -
@@ -39,17 +45,13 @@ echo "mongodb-org-mongos hold" | sudo dpkg --set-selections
 echo "mongodb-org-tools hold" | sudo dpkg --set-selections
 sudo systemctl start mongod
 sudo systemctl status mongod
+export MONGODB_HOST="localhost:27017"
 mongo
 ```
 - Download NLP model:
 ```
 python -m spacy download en_core_web_lg
 ```
-### Add environmental variables:
-- export MONGODB_HOST="localhost:27017"
-- export GRAFANA_KEY="Bearer FNJZ0gyS..."
-
-e.g. in Pycharm https://stackoverflow.com/questions/42708389/how-to-set-environment-variables-in-pycharm
 ## First steps to execute FTS analysis
 1. Run vofeed.py to dump all data to mongodb
 2. Select the time scope of your search. e.g. Time(hours=24)
