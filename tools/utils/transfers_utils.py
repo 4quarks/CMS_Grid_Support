@@ -1,6 +1,7 @@
 import re
 import pandas as pd
 import logging
+from constants import CteRucio
 import xlsxwriter
 
 

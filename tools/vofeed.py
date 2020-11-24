@@ -1,7 +1,7 @@
-from mongotools import MongoDB
+from utils.mongotools import MongoDB
 from abc import ABC
-from query_utils import AbstractQueries, Time
-from constants import Constants as Cte
+from utils.query_utils import AbstractQueries, Time
+from utils.constants import Constants as Cte
 
 """
 data.site 	T1_ES_PIC
