@@ -13,24 +13,29 @@ TODO on the command line:
 
 - Clone repo:
 ```
-git clone git@github.com:paucutrina/CMS_Grid_Support.git
+$ git clone git@github.com:paucutrina/CMS_Grid_Support.git
 ```
 - Setup virtual environment
 ```
-cd CMS_Grid_Support
-sudo apt-get install python3-venv
-python3 -m venv venv
-source venv/bin/activate
+$ cd CMS_Grid_Support
+$ sudo apt-get install python3-venv
+$ python3 -m venv venv
+$ source venv/bin/activate
 ```
 - Install Python libraries on the venv:
 ```
-pip install -r requirements.txt
+$ pip install -r requirements.txt
 ```
 #### Add environmental variables:
 ```
-export GRAFANA_KEY="Bearer FNJZ0gyS..."
+$ export GRAFANA_KEY="Bearer FNJZ0gyS..."
 ```
-
+## Execute Rucio analysis
+```
+$ python transfers_rucio.py -h
+$ python transfers_rucio.py 24 se3.itep.ru/se01.indiacms.res.in/cmsio.rc.ufl.edu T2_ES_IFCA --write_lfns --error No.such.file
+```
+## Develpoment in progress...
 ### Optional installation
 - Install mongodb e.g. Ubuntu:
 ```
