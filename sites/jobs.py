@@ -67,6 +67,9 @@ data.JobFailed 	1
 data.VO 	cms
 data.Chirp_CRAB3_Job_ExitCode 	8,020
 data.Chirp_WMCore_cmsRun_Exception_Message 	b"An exception of category 'FileOpenError' occurred ..."
+
+https://monit-kibana.cern.ch/kibana/goto/d9fdfe6a44b115a45e7ad21c4c9c21f0
+
 ------------------------------------------------
 data.CRAB_PostJobStatus 	finished
 data.Status 	Completed

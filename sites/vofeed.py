@@ -1,8 +1,11 @@
 # coding=utf-8
-from utils.mongotools import MongoDB
+
 from abc import ABC
-from utils.query_utils import AbstractQueries, Time
+from utils.query_utils import AbstractQueries
 from utils.constants import Constants as Cte
+import json
+import requests
+import re
 
 """
 data.site 	T1_ES_PIC
@@ -52,6 +55,18 @@ data.wlcg_federation_name 	Austrian Tier-2 Federation
 """
 
 TEST_FIELD = "metadata.path:"
+ALL_RESOURCES = json.loads(requests.get("https://pcutrina.web.cern.ch/pcutrina/sites_resources.json").content)
+
+
+def get_resources_from_json(site="", hostname="", flavour=""):
+    list_resources = []
+    for resource in ALL_RESOURCES:
+        is_site = site and re.search(site, resource["site"])
+        is_host = hostname and re.search(hostname, resource["hostname"])
+        is_flavour = flavour and re.search(flavour, resource["flavour"])
+        if is_site or is_host or is_flavour:
+            list_resources.append(resource)
+    return list_resources
 
 
 class VOFeed(AbstractQueries, ABC):
@@ -61,8 +76,6 @@ class VOFeed(AbstractQueries, ABC):
         self.index_id = "9475"
         self.field_id = "vofeed15min"
         self.field_site_name = "data.site:"
-
-        self.mongo = MongoDB()
 
     def get_resources(self, response):
         all_resources = []
@@ -86,31 +99,6 @@ class VOFeed(AbstractQueries, ABC):
         response = self.get_direct_response(kibana_query)
         resources_site = self.get_resources(response)
         return resources_site
-
-    def update_mongo_vofeed(self, site_name=""):
-        all_resources = self.get_site_resources("/.*{}.*/".format(site_name))
-        self.mongo.insert_list_documents(self.mongo.vofeed, all_resources, delete_collection=True)
-
-    def get_resource_filtered(self, flavour="", hostname="", site=""):
-        query = {}
-        if flavour:
-            query.update({"flavour": {'$regex': flavour}})
-        if hostname:
-            query.update({"hostname": {'$regex': hostname}})
-        if site:
-            query.update({"site": {'$regex': site}})
-        return self.mongo.find_document(self.mongo.vofeed, query)
-
-    def get_list(self, field=""):
-        """
-
-        :param field: site|hostname|flavour
-        :return:
-        """
-        unique_list = []
-        if field:
-            unique_list = self.mongo.find_unique_fields(self.mongo.vofeed, field)
-        return unique_list
 
 
 class SiteCapacity(AbstractQueries, ABC):
@@ -138,9 +126,6 @@ class SiteCapacity(AbstractQueries, ABC):
 
 
 if __name__ == "__main__":
-    time = Time(hours=24)
-    vofeed = VOFeed(time)
-
-    vofeed.update_mongo_vofeed()
+    pass
 
 
