@@ -1,10 +1,13 @@
-from vofeed import VOFeed
-from sam3 import SAMTest
+# coding=utf-8
+
+from sites.vofeed import VOFeed
+from sites.sam3 import SAMTest
 from utils.constants import CteSAM as CteSAM
 import pandas as pd
 import time
 from abc import ABC
-from utils.query_utils import AbstractQueries, group_data, Time, timestamp_to_human_utc
+from utils.query_utils import AbstractQueries, Time, timestamp_to_human_utc
+from utils.nlp_utils import group_data
 from copy import deepcopy
 
 """
@@ -176,7 +179,8 @@ class AbstractSiteStatus(AbstractQueries, ABC):
                                         timestamp_hr = timestamp_to_human_utc(error_data[CteSAM.REF_TIMESTAMP])
                                         error_data.update({CteSAM.REF_TIMESTAMP_HR: timestamp_hr})
 
-                                        grouped_by_error = group_data(grouped_by_error, error_data, ['metric_name'], CteSAM)
+                                        grouped_by_error = group_data(grouped_by_error, error_data, ['metric_name'],
+                                                                      CteSAM)
                                 for error_grouped, value_error in grouped_by_error.items():
                                     for single_error in value_error:
                                         rows.append(
@@ -216,9 +220,13 @@ class TestsAbstract:
 
 
 if __name__ == "__main__":
-    BLACKLIST_SITES = ["T2_PL_Warsaw", "T2_RU_ITEP"]
-    time_ss = Time(hours=CteSAM.HOURS_RANGE)
-    sam = AbstractSiteStatus(time_ss, site="T1|T2")
-    # sam.get_status(metrics=[Tests.SAM.metric, Tests.HammerCloud.metric])
-    errors = sam.get_issues_resources()
+    import requests
+    headers = {'Content-Type': 'application/json'}
+    raw_response = requests.request("POST", "https://cmssst.web.cern.ch/cmssst/vofeed/vofeed.xml")
     print()
+    # BLACKLIST_SITES = ["T2_PL_Warsaw", "T2_RU_ITEP"]
+    # time_ss = Time(hours=CteSAM.HOURS_RANGE)
+    # sam = AbstractSiteStatus(time_ss, site="T2_CH_CERN")
+    # # sam.get_status(metrics=[Tests.SAM.metric, Tests.HammerCloud.metric])
+    # errors = sam.get_issues_resources()
+    # print()

@@ -1,3 +1,5 @@
+# coding=utf-8
+
 import logging
 from utils.constants import CteFTS
 import time
