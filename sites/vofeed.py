@@ -1,3 +1,4 @@
+# coding=utf-8
 from utils.mongotools import MongoDB
 from abc import ABC
 from utils.query_utils import AbstractQueries, Time
@@ -89,7 +90,6 @@ class VOFeed(AbstractQueries, ABC):
     def update_mongo_vofeed(self, site_name=""):
         all_resources = self.get_site_resources("/.*{}.*/".format(site_name))
         self.mongo.insert_list_documents(self.mongo.vofeed, all_resources, delete_collection=True)
-
 
     def get_resource_filtered(self, flavour="", hostname="", site=""):
         query = {}

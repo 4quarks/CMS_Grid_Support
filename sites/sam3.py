@@ -1,4 +1,7 @@
-from utils.query_utils import *
+# coding=utf-8
+
+from abc import ABC
+from utils.query_utils import AbstractQueries, Time
 
 """
 data.details  OK: COMPLETED.<br>>>> ce05-htc.cr.cnaf.infn.it: ....
@@ -28,8 +31,9 @@ class SAMTest(AbstractQueries, ABC):
         self.index_id = "9677"
 
     def get_details_test(self, hostname, metric_name=""):
-        kibana_query = "data.dst_hostname:{} AND data.status:CRITICAL AND data.metric_name:/.*{}.*/".format(hostname,
-                                                                                                            metric_name)
+        kibana_query = "data.vo:cms AND data.dst_hostname:{} " \
+                       "AND data.status:CRITICAL " \
+                       "AND data.metric_name:/.*{}.*/".format(hostname,metric_name)
         response = self.get_direct_response(kibana_query=kibana_query)
 
         # all_logs = []

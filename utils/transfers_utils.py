@@ -1,39 +1,16 @@
+# coding=utf-8
+import time
 import re
 import pandas as pd
 import logging
-from constants import CteRucio
+from utils.constants import CteRucio
 import xlsxwriter
 
 
-class AbstractNLP:
-    def __init__(self, raw_text):
-        self.raw_text = raw_text
-        self.clean_text = self.preprocess_string_nlp(raw_text)
-
-    def preprocess_string_nlp(self, text):
-        return text.lower().strip()
-
-
-class TextNLP(AbstractNLP):
-    def __init__(self, raw_text, ref_keywords_clean):
-        super().__init__(raw_text)
-        self.ref_keywords_clean = ref_keywords_clean
-
-    def get_keyword(self, clean_text):
-        keywords_value = None
-        keywords = [elem for elem in self.ref_keywords_clean if elem in clean_text]
-        # We should not have more than 2 keywords in one error
-        if len(keywords) > 1:
-            print('ERROR! {}, {}'.format(keywords, clean_text))
-            keywords_value = keywords[1]
-        if keywords:
-            keywords_value = keywords[0]
-        return keywords_value
-
-
 class ExcelGenerator:
-    def __init__(self, dict_results):
+    def __init__(self, dict_results, target):
         self.dict_results = dict_results
+        self.target = target
 
     @staticmethod
     def get_column_id(num_rows, num_columns_ahead=0, num_rows_ahead=0):
@@ -94,8 +71,7 @@ class ExcelGenerator:
         ############  ITERATE OVER ALL SRMs HOSTS ############
         for storage_element, se_value in self.dict_results.items():
             time_analysis = round(time.time())
-            host_analysis = "EOEOEO"
-            file_name = '{}_{}'.format(time_analysis, host_analysis)
+            file_name = '{}_{}'.format(time_analysis, self.target)
             writer = pd.ExcelWriter(file_name + ".xlsx", engine='xlsxwriter')
             ############ GET DATA ORIGIN AND DESTINATION ############
             for direction, direction_value in se_value.items():

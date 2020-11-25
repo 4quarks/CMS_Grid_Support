@@ -20,7 +20,7 @@
   <p align="center">
     Tools to accelerate monitoring in the CMS computing grid
     <br />
-    <a href="https://github.com/4quarks/CMS_Grid_Support/blob/main/Documents"><strong>Explore the docs »</strong></a>
+    <a href="https://github.com/4quarks/CMS_Grid_Support/documents"><strong>Explore the docs »</strong></a>
     <br />
     <br />
     <a href="#usage">View Demo</a>
@@ -76,24 +76,30 @@ The main technologies used on this project are:
 
 ### Structure
 ```
+$ tree -I 'venv|*pycache*|images|*.pyc'
+CMS_Grid_Support
 ├── LICENSE
 ├── README.md
 ├── requirements.txt
-└── tools
+├── sites
+│   ├── __init__.py
+│   ├── jobs.py
+│   ├── sam3.py
+│   ├── site_status.py
+│   └── vofeed.py
+├── transfers
+│   ├── app.py
+│   ├── __init__.py
+│   ├── __main__.py
+│   ├── transfers.py
+│   └── transfers_rucio.py
+└── utils
+    ├── constants.py
     ├── __init__.py
-    ├── jobs.py
-    ├── sam3.py
-    ├── site_status.py
-    ├── transfers.py
-    ├── transfers_rucio.py
-    ├── utils
-    │   ├── constants.py
-    │   ├── __init__.py
-    │   ├── mongotools.py
-    │   ├── nlp_utils.py
-    │   ├── query_utils.py
-    │   └── transfers_utils.py
-    └── vofeed.py
+    ├── mongotools.py
+    ├── nlp_utils.py
+    ├── query_utils.py
+    └── transfers_utils.py
 ```
 
 <!-- GETTING STARTED -->
@@ -136,27 +142,19 @@ This is an example of how to list things you need to use the software and how to
 
 <!-- USAGE EXAMPLES -->
 ## Usage
-To see the further information:
+To see the details:
 ```
-$ python transfers_rucio.py -h
+$ python -m transfers -h
 ```
-Here below you can see an example:
+Here below you can see different examples:
 ```
-$ python transfers_rucio.py 24 se3.itep.ru/tape/Checksum T2_ES_IFCA --write_lfns --error No.such.file
+$ python -m transfers storm.ifca.es
+$ python -m transfers T1_UK_RAL storm.ifca.es
+$ python -m transfers T1_UK_RAL -hr 16
+$ python -m transfers T1_UK_RAL -b se3.itep.ru/tape/Checksum
+$ python -m transfers T1_UK_RAL -e No.such.file
+$ python -m transfers T1_UK_RAL -lfn
 ```
-
-* Required arguments:
-```
-24: the analysis will contain the last 24h of information
-T2_ES_IFCA: site that we are interested in. We could instead specify the hostname e.g. storm.ifca.es
-```
-* Optional arguments:
-```
---write_lfns: generate txt file with all LFNs grouped by error
---error No.such.file: find one specific error (spaces should be ".")
---black se3.itep.ru/tape/Checksum: blacklist keywords from PFNs 
-```
-
 
 
 

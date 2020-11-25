@@ -1,5 +1,10 @@
-from utils.query_utils import *
-from vofeed import VOFeed
+# coding=utf-8
+
+from sites.vofeed import VOFeed
+from abc import ABC
+from utils.query_utils import AbstractQueries, group_data, Time
+
+
 """
 data.CRAB_PostJobStatus  Running|failed|finished
 data.Type 	test|production|analysis

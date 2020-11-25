@@ -1,10 +1,11 @@
+# coding=utf-8
 from utils.constants import CteRucio
 import time
 from copy import deepcopy
 from abc import ABC
 from utils.query_utils import AbstractQueries, Time
-import argparse
-from utils.transfers_utils import ExcelGenerator, TextNLP
+from utils.transfers_utils import ExcelGenerator
+from utils.nlp_utils import group_data
 
 """
 ######################## monit_prod_cms_rucio_enr*  ########################
@@ -53,19 +54,23 @@ class Transfers(AbstractQueries, ABC):
         self.index_id = CteRucio.INDEX_ES_ID
 
     @staticmethod
-    def is_blacklisted(src_url, dest_url):
+    def is_blacklisted(src_url, dest_url, str_blacklist):
         """
         Check if the pfn contains blacklisted elements
         :param src_url: 'gsiftp://eoscmsftp.cern.ch//eos/cms/store/temp/user/cc/.../out_offline_Photons_230.root'
         :param dest_url:
         :return:
         """
-        black_pfn = [black_pfn for black_pfn in BLACKLIST_PFN if black_pfn in src_url or black_pfn in dest_url]
+        black_pfn = []
+        if str_blacklist:
+            blacklist = str_blacklist.split("/")
+            black_pfn = [black_pfn for black_pfn in blacklist if black_pfn in src_url or black_pfn in dest_url]
         return black_pfn
 
     def build_query_get_response(self, direction, site="", hostname="", filter_error_kibana=""):
         """
 
+        :param site:
         :param hostname: name of the host to analyze e.g. eoscmsftp.cern.ch
         :param direction: s / d
         :param filter_error_kibana: keyword of the error to find e.g. "No such file"
@@ -94,7 +99,7 @@ class Transfers(AbstractQueries, ABC):
                 lfn = "/store" + raw_pfn.split("/store")[1]
         return lfn, protocol, se
 
-    def analyze_site(self, target="", filter_error_kibana=""):
+    def analyze_site(self, target="", filter_error_kibana="", str_blacklist=""):
         """
         Get dict with all the errors grouped by: host, destination/origin, type of error
         """
@@ -115,7 +120,7 @@ class Transfers(AbstractQueries, ABC):
                 error_data = deepcopy(error[CteRucio.REF_DATA])
                 src_url, dst_url = error_data[CteRucio.REF_PFN_SRC], error_data[CteRucio.REF_PFN_DST]
                 ############ AVOID ERRORS THAT ARE BLACKLISTED ############ç
-                in_blacklist = self.is_blacklisted(src_url, dst_url)
+                in_blacklist = self.is_blacklisted(src_url, dst_url, str_blacklist)
                 # Extract useful data
                 if CteRucio.REF_LOG in error_data.keys() and not in_blacklist:
                     ############ ADD EXTRA DATA ############
@@ -129,71 +134,17 @@ class Transfers(AbstractQueries, ABC):
 
                     ############ GROUP THE ERROR ############
                     attributes_if_match_same_error = [CteRucio.REF_PFN_SRC, CteRucio.REF_PFN_DST]
-                    grouped_by_error = group_data(grouped_by_error, error_data, attributes_if_match_same_error)
+                    grouped_by_error = group_data(grouped_by_error, error_data, attributes_if_match_same_error,
+                                                  CteRucio)
             if grouped_by_error:
                 data_host.update({direction: grouped_by_error})
         all_data.update({hostname: data_host})
         return all_data
 
 
-def group_data(grouped_by_error, error_data, list_same_ref):
-    ############ ADD EXTRA INFO ############
-    error_log = error_data[CteRucio.REF_LOG]
-    error_data.update({CteRucio.REF_NUM_ERRORS: 1})
-
-    ########### DETECT KEYWORDS ###########
-    error_nlp = TextNLP(error_log, CteRucio.KEYWORDS_ERRORS)
-    previous_errors = list(grouped_by_error.keys())
-    keyword = error_nlp.get_keyword(error_nlp.clean_text)
-    if keyword:
-        error_ref = keyword
-    else:
-        error_ref = error_log
-    ############ CHOOSE REFERENCE ############
-    if keyword not in previous_errors and error_log not in previous_errors:
-        # If the error was not grouped --> add
-        grouped_by_error.update({error_ref: [error_data]})
-    else:
-        # If the error match with another --> count repetition
-        exactly_same_error = False
-        # EXACT SAME ERROR REPEATED --> num_errors + 1
-        for idx, element in enumerate(grouped_by_error[error_ref]):
-            # SAME ERROR & SAME PFN --> SAME ISSUE
-            for reference in list_same_ref:
-                if element[reference] == error_data[reference]:
-                    exactly_same_error = True
-                else:
-                    exactly_same_error = False
-            if exactly_same_error:
-                grouped_by_error[error_ref][idx][CteRucio.REF_NUM_ERRORS] += 1
-                break
-        if not exactly_same_error:
-            grouped_by_error[error_ref].append(error_data)
-    return grouped_by_error
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("hours", help="Number of hours to analyze", type=int)
-    parser.add_argument("target", help="Site or hostname to analyze", type=str)
-    parser.add_argument("--black", help="Blacklisted elements separated by '/'", type=str)
-    parser.add_argument("--write_lfns", help="Write files with all LFNS", action="store_true")
-    parser.add_argument("--error", help="Keywords to search on the error log (separate by dots '.')", type=str)
-    args = parser.parse_args()
-    if args.error:
-        args.error = args.error.replace(".", " ")
-    if args.write_lfns:
-        args.write_lfns = True
-
-    time_class = Time(hours=args.hours)
-    fts = Transfers(time_class)
-    BLACKLIST_PFN = args.black.split("/")
-    dict_result = fts.analyze_site(target=args.target, filter_error_kibana=args.error)
-    generator = ExcelGenerator(dict_result)
-    generator.results_to_csv(write_lfns=args.write_lfns)
-
-    # time_class = Time(hours=12)
-    # fts = Transfers(time_class)
-    # BLACKLIST_PFN = ["se3.itep.ru", "se01.indiacms.res.in", "cmsio.rc.ufl.edu"]
-    # dict_result = fts.analyze_site(site_or_host="T2_ES_IFCA")
-    # fts.results_to_csv(dict_result, write_lfns=False)
+# if __name__ == "__main__":
+#     time_class = Time(days=1, hours=0, minutes=0)
+#     fts = Transfers(time_class)
+#     dict_result = fts.analyze_site(target="T2_HU_Budapest", str_blacklist="se3.itep.ru/se01.indiacms.res.in")
+#     generator = ExcelGenerator(dict_result, "T2_HU_Budapest")
+#     generator.results_to_csv(write_lfns=False)

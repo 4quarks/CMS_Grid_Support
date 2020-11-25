@@ -1,3 +1,4 @@
+# coding=utf-8
 import pymongo
 import os
 from pymongo.collation import Collation
