@@ -1,6 +1,6 @@
 # coding=utf-8
 
-from sites.vofeed import VOFeed
+from sites.vofeed import get_resources_from_json
 from sites.sam3 import SAMTest
 from utils.constants import CteSAM as CteSAM
 import pandas as pd
@@ -9,6 +9,7 @@ from abc import ABC
 from utils.query_utils import AbstractQueries, Time, timestamp_to_human_utc
 from utils.nlp_utils import group_data
 from copy import deepcopy
+from utils.site_utils import get_resource_from_target
 
 """
 ---------------------------------------------------------------------------------
@@ -90,21 +91,20 @@ data.RemoveReason:/"Removed due to wall clock limit"/
 """
 
 
-class AbstractSiteStatus(AbstractQueries, ABC):
-    def __init__(self, time_class, site="", str_freq="15min", specific_fields=None, flavour=None):
+class SiteStatus(AbstractQueries, ABC):
+    def __init__(self, time_class, target="", str_freq="15min", blacklist_str="", specific_fields=None):
         super().__init__(time_class)
-        self.index_name = "monit_prod_cmssst*"
-        self.index_id = "9475"
+        self.index_name = CteSAM.INDEX_ES
+        self.index_id = CteSAM.INDEX_ES_ID
 
         self.specific_fields = specific_fields
-
         self.str_freq = str_freq
 
-        self.site_name = site
+        self.blacklist = blacklist_str
 
-        self.vofeed = VOFeed(0)
-        self.flavour = flavour
-        self.site_resources = self.vofeed.get_resource_filtered(site=site, flavour=flavour)
+        self.site_name, self.hostname, self.flavour = get_resource_from_target(target)
+
+        self.site_resources = get_resources_from_json(site=self.site_name, hostname=self.hostname, flavour=self.flavour)
 
         self.sam3 = SAMTest(time_class)
 
@@ -146,17 +146,15 @@ class AbstractSiteStatus(AbstractQueries, ABC):
         return most_frequent_status, list_errors, num_status_row, num_errors
 
     def get_issues_resources(self):
-        resources_evaluated = []
         rows = []
-        columns = [CteSAM.REF_TIMESTAMP_HR, CteSAM.REF_SITE, CteSAM.REF_HOST, CteSAM.REF_FLAVOUR, CteSAM.REF_STATUS,
-                   'num_row_failures', 'num_failed_tests', 'failed_test', CteSAM.REF_LOG, CteSAM.REF_NUM_ERRORS]
+
         for resource in self.site_resources:
             hostname = resource[CteSAM.REF_HOST]
             flavour = resource[CteSAM.REF_FLAVOUR]
             site = resource[CteSAM.REF_SITE]
 
             is_test_endpoint = "production" in resource.keys()
-            is_blacklisted = site in BLACKLIST_SITES
+            is_blacklisted = site in self.blacklist
 
             if not is_test_endpoint and not is_blacklisted:
                 kibana_query_all = self.get_kibana_query("sam", name=hostname, flavour=flavour)
@@ -192,15 +190,17 @@ class AbstractSiteStatus(AbstractQueries, ABC):
                                 ["time", site, hostname, flavour, status, num_not_ok_tests,
                                  num_errors_row,
                                  str(list_errors), None, None])
+        return rows
 
+    def write_excel(self, rows):
+        columns = [CteSAM.REF_TIMESTAMP_HR, CteSAM.REF_SITE, CteSAM.REF_HOST, CteSAM.REF_FLAVOUR, CteSAM.REF_STATUS,
+                   'num_row_failures', 'num_failed_tests', 'failed_test', CteSAM.REF_LOG, CteSAM.REF_NUM_ERRORS]
         timestamp_now = round(time.time())
         file_name = "{}_{}".format(timestamp_now, "SiteStatus")
         writer = pd.ExcelWriter(file_name + ".xlsx", engine='xlsxwriter')
         df_group = pd.DataFrame(rows, columns=columns)
         df_group.to_excel(writer, index=False)
         writer.save()
-
-        return resources_evaluated
 
 
 class TestsAbstract:
@@ -219,14 +219,10 @@ class TestsAbstract:
 #                                                               "manual_prod", "manual_crab"])
 
 
-if __name__ == "__main__":
-    import requests
-    headers = {'Content-Type': 'application/json'}
-    raw_response = requests.request("POST", "https://cmssst.web.cern.ch/cmssst/vofeed/vofeed.xml")
-    print()
-    # BLACKLIST_SITES = ["T2_PL_Warsaw", "T2_RU_ITEP"]
-    # time_ss = Time(hours=CteSAM.HOURS_RANGE)
-    # sam = AbstractSiteStatus(time_ss, site="T2_CH_CERN")
-    # # sam.get_status(metrics=[Tests.SAM.metric, Tests.HammerCloud.metric])
-    # errors = sam.get_issues_resources()
-    # print()
+# if __name__ == "__main__":
+#
+#     time_ss = Time(hours=CteSAM.HOURS_RANGE)
+#     sam = SiteStatus(time_ss, target="T1|T2", blacklist_str="T2_PL_Warsaw/T2_RU_ITEP")
+#     # sam.get_status(metrics=[Tests.SAM.metric, Tests.HammerCloud.metric])
+#     errors = sam.get_issues_resources()
+#     print()

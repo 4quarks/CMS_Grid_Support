@@ -93,8 +93,14 @@ def count_repeated_elements_list(list_elements):
 
 class Time:
     def __init__(self, days=0, hours=0, minutes=0, seconds=0):
-        if not days and not hours and not minutes and not seconds:
-            days, hours, minutes, seconds = 1, 0, 0, 0
+        if not days:
+            days = 0
+        if not hours:
+            hours = 0
+        if not minutes:
+            minutes = 0
+        if not seconds:
+            seconds = 0
         self.days = days
         self.hours = hours
         self.minutes = minutes

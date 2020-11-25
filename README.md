@@ -78,17 +78,18 @@ The main technologies used on this project are:
 ```
 $ tree -I 'venv|*pycache*|images|*.pyc'
 CMS_Grid_Support
+├── app.py
 ├── LICENSE
 ├── README.md
 ├── requirements.txt
 ├── sites
 │   ├── __init__.py
 │   ├── jobs.py
+│   ├── __main__.py
 │   ├── sam3.py
 │   ├── site_status.py
 │   └── vofeed.py
 ├── transfers
-│   ├── app.py
 │   ├── __init__.py
 │   ├── __main__.py
 │   ├── transfers.py
@@ -99,6 +100,7 @@ CMS_Grid_Support
     ├── mongotools.py
     ├── nlp_utils.py
     ├── query_utils.py
+    ├── site_utils.py
     └── transfers_utils.py
 ```
 
@@ -142,6 +144,8 @@ This is an example of how to list things you need to use the software and how to
 
 <!-- USAGE EXAMPLES -->
 ## Usage
+
+### Transfers
 To see the details:
 ```
 $ python -m transfers -h
@@ -149,13 +153,25 @@ $ python -m transfers -h
 Here below you can see different examples:
 ```
 $ python -m transfers storm.ifca.es
-$ python -m transfers T1_UK_RAL storm.ifca.es
+$ python -m transfers T1_UK_RAL 
 $ python -m transfers T1_UK_RAL -hr 16
 $ python -m transfers T1_UK_RAL -b se3.itep.ru/tape/Checksum
 $ python -m transfers T1_UK_RAL -e No.such.file
 $ python -m transfers T1_UK_RAL -lfn
 ```
 
+### Site Status
+To see the details:
+```
+$ python -m sites -h
+```
+Here below you can see different examples:
+```
+$ python -m sites T1_UK_RAL
+$ python -m sites "T1|T2"
+$ python -m transfers T1_UK_RAL -hr 8
+$ python -m transfers T1_UK_RAL -b T2_PL_Warsaw
+```
 
 
 <!-- ROADMAP -->

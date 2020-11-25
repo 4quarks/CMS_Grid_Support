@@ -6,6 +6,7 @@ from abc import ABC
 from utils.query_utils import AbstractQueries, Time
 from utils.transfers_utils import ExcelGenerator
 from utils.nlp_utils import group_data
+import re
 
 """
 ######################## monit_prod_cms_rucio_enr*  ########################
@@ -105,7 +106,8 @@ class Transfers(AbstractQueries, ABC):
         """
         all_data, data_host = {}, {}
         site, hostname = target, ""
-        if target and "T" not in target[0]:
+        # IF THE TARGET IS NOT A SITE
+        if target and not re.search("T[0-9]_*", target):
             hostname, site = target, ""
 
         ############ GET DATA ORIGIN AND DESTINATION ############
@@ -138,8 +140,10 @@ class Transfers(AbstractQueries, ABC):
                                                   CteRucio)
             if grouped_by_error:
                 data_host.update({direction: grouped_by_error})
-        all_data.update({hostname: data_host})
+
+        all_data.update({target: data_host})
         return all_data
+
 
 
 # if __name__ == "__main__":
