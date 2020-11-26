@@ -1,8 +1,8 @@
 # coding=utf-8
 
 from abc import ABC
-from utils.query_utils import AbstractQueries
-from utils.constants import Constants as Cte
+from tools.utils.query_utils import AbstractQueries
+from tools.utils.constants import Constants as Cte
 import json
 import requests
 import re
@@ -60,11 +60,14 @@ ALL_RESOURCES = json.loads(requests.get("https://pcutrina.web.cern.ch/pcutrina/s
 
 def get_resources_from_json(site="", hostname="", flavour=""):
     list_resources = []
+    dict_components = {"site": site, "hostname": hostname, "flavour": flavour}
     for resource in ALL_RESOURCES:
-        is_site = site and re.search(site, resource["site"])
-        is_host = hostname and re.search(hostname, resource["hostname"])
-        is_flavour = flavour and re.search(flavour, resource["flavour"])
-        if is_site or is_host or is_flavour:
+        match_resource = True
+        for key_comp, val_comp in dict_components.items():
+            if val_comp:
+                if not re.search(val_comp, resource[key_comp]):
+                    match_resource = False
+        if match_resource:
             list_resources.append(resource)
     return list_resources
 
@@ -127,5 +130,3 @@ class SiteCapacity(AbstractQueries, ABC):
 
 if __name__ == "__main__":
     pass
-
-

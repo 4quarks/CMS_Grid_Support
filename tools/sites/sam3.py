@@ -1,7 +1,7 @@
 # coding=utf-8
 
 from abc import ABC
-from utils.query_utils import AbstractQueries, Time
+from tools.utils.query_utils import AbstractQueries, Time
 
 """
 data.details  OK: COMPLETED.<br>>>> ce05-htc.cr.cnaf.infn.it: ....
