@@ -208,9 +208,11 @@ See the [milestones](https://github.com/4quarks/CMS_Grid_Support/milestones) for
 You can also see the known [issues](https://github.com/4quarks/CMS_Grid_Support/issues). 
 If you have suggestions, please, do not hesitate to create new milestones and report issues! 
 
-#### Site Status with AI
-This is still under development but is already possible to get a full report of the sites' computing resources.
+#### Intelligent Sites Analysis
+This is still under development but the idea is to implement an intelligent system to detect, classify and report 
+site errors. 
 
+<!-- 
 - Install mongodb e.g. Ubuntu:
 ```
 wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | sudo apt-key add -
@@ -231,11 +233,7 @@ export MONGODB_HOST="localhost:27017"
 ```
 python -m spacy download en_core_web_lg
 ```
-1. Run vofeed.py to dump all data to mongodb
-2. Define the sites that you are not interested in. e.g. BLACKLIST_SITES = ["T2_PL_Warsaw"]
-3. Introduce site or the scope to analyze. AbstractSiteStatus(time_ss, site="T1|T2")
-4. Run site_status.py
-
+-->
 
 <!-- CONTRIBUTING -->
 ## Contributing
