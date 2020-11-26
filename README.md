@@ -124,24 +124,23 @@ This is an example of how to list things you need to use the software and how to
 
 ### Installation
 
-1. Get a free API Key at [https://example.com](https://example.com)
-2. Clone the repo
-   ```shell script
+1. Clone the repo:
+   ```
    $ git clone git@github.com:paucutrina/CMS_Grid_Support.git
    ```
-3. Setup virtual environment
-    ```shell script
+2. Setup virtual environment:
+    ```
     $ cd CMS_Grid_Support
     $ sudo apt-get install python3-venv
     $ python3 -m venv venv
     $ source venv/bin/activate
     ```
-4. Install Python libraries listed on the `requirements.txt`
-   ```shell script
+3. Install Python libraries listed on the `requirements.txt`:
+   ```
    $ pip install -r requirements.txt
    ```
-5. Add environmental variables:
-    ```shell script
+4. Add environmental variables:
+    ```
     $ export GRAFANA_KEY="Bearer FNJZ0gyS..."
     ```
 
