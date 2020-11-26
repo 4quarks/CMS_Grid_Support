@@ -171,7 +171,7 @@ $ python -m tools transfers T1_UK_RAL --error No.such.file
 $ python -m tools transfers T1_UK_RAL --write_lfns 
 ```
 <p align="center">
- <img src="images/eg_transfers.jpeg" alt="Eg Transfers" width="480" height="300">
+ <img src="images/eg_transfers.png" alt="Eg Transfers Excel" width="480" height="300">
 </p>
 
 1. Source information
