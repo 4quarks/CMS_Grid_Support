@@ -76,32 +76,35 @@ The main technologies used on this project are:
 
 ### Structure
 ```
-$ tree -I 'venv|*pycache*|images|*.pyc'
+$ tree -I 'venv|*pycache*|images|documents|*.pyc'
 CMS_Grid_Support
-├── app.py
 ├── LICENSE
 ├── README.md
 ├── requirements.txt
-├── sites
-│   ├── __init__.py
-│   ├── jobs.py
-│   ├── __main__.py
-│   ├── sam3.py
-│   ├── site_status.py
-│   └── vofeed.py
-├── transfers
-│   ├── __init__.py
-│   ├── __main__.py
-│   ├── transfers.py
-│   └── transfers_rucio.py
-└── utils
-    ├── constants.py
+└── tools
+    ├── app.py
     ├── __init__.py
-    ├── mongotools.py
-    ├── nlp_utils.py
-    ├── query_utils.py
-    ├── site_utils.py
-    └── transfers_utils.py
+    ├── __main__.py
+    ├── sites
+    │   ├── __init__.py
+    │   ├── jobs.py
+    │   ├── __main__.py
+    │   ├── sam3.py
+    │   ├── site_status.py
+    │   └── vofeed.py
+    ├── transfers
+    │   ├── __init__.py
+    │   ├── __main__.py
+    │   ├── transfers.py
+    │   └── transfers_rucio.py
+    └── utils
+        ├── constants.py
+        ├── __init__.py
+        ├── mongotools.py
+        ├── nlp_utils.py
+        ├── query_utils.py
+        ├── site_utils.py
+        └── transfers_utils.py
 ```
 
 <!-- GETTING STARTED -->
@@ -121,56 +124,79 @@ This is an example of how to list things you need to use the software and how to
 
 ### Installation
 
-1. Get a free API Key at [https://example.com](https://example.com)
-2. Clone the repo
-   ```shell script
+1. Clone the repo:
+   ```
    $ git clone git@github.com:paucutrina/CMS_Grid_Support.git
    ```
-3. Setup virtual environment
-    ```shell script
+2. Setup virtual environment:
+    ```
     $ cd CMS_Grid_Support
     $ sudo apt-get install python3-venv
     $ python3 -m venv venv
     $ source venv/bin/activate
     ```
-4. Install Python libraries listed on the `requirements.txt`
-   ```shell script
+3. Install Python libraries listed on the `requirements.txt`:
+   ```
    $ pip install -r requirements.txt
    ```
-5. Add environmental variables:
-    ```shell script
+4. Add environmental variables:
+    ```
     $ export GRAFANA_KEY="Bearer FNJZ0gyS..."
     ```
 
 <!-- USAGE EXAMPLES -->
 ## Usage
+You can see the functionalities:
+```
+$ python -m tools -h
+```
 
 ### Transfers
-To see the details:
+Running the `transfers` module you will write an Excel with all the transfers errors for a 
+certain period (--hours/--days/--minutes, default 24h) for one specific site/host. You can filter the search blacklisting 
+sites, endpoints, directories, etc from the url (--blacklist) or looking for an specific error (--error).
+You can also write a txt file with all the LFNs grouped by error (--write_lfns). 
+
 ```
-$ python -m transfers -h
+$ python -m tools transfers -h
 ```
 Here below you can see different examples:
 ```
-$ python -m transfers storm.ifca.es
-$ python -m transfers T1_UK_RAL 
-$ python -m transfers T1_UK_RAL -hr 16
-$ python -m transfers T1_UK_RAL -b se3.itep.ru/tape/Checksum
-$ python -m transfers T1_UK_RAL -e No.such.file
-$ python -m transfers T1_UK_RAL -lfn
+$ python -m tools transfers storm.ifca.es
+$ python -m tools transfers T1_UK_RAL 
+$ python -m tools transfers T1_UK_RAL --hours 16
+$ python -m tools transfers T1_UK_RAL --blacklist "se3.itep.ru/temp/Checksum"
+$ python -m tools transfers T1_UK_RAL --error No.such.file
+$ python -m tools transfers T1_UK_RAL --write_lfns 
 ```
+<p align="center">
+ <img src="images/eg_transfers.png" alt="Eg Transfers Excel" width="480" height="300">
+</p>
+
+1. Source information
+2. Destination information
+3. File details
+4. Number of failures grouped by error type
+5. Failures grouped by sites
+6. Direction of the transfers from the specified target point of view. 
+
+\* If there are user errors it automatically creates a table with the usernames. 
 
 ### Site Status
-To see the details:
+Running the `sites` module you will write an Excel file with the SAM errors of 
+the target computing resource or site for a certain period (--hours/--days/--minutes, default 5h).
+You can specify the flavour (--flavour) as well as the blacklisted sites and hosts (--blacklist). 
+
 ```
-$ python -m sites -h
+$ python -m tools sites -h
 ```
 Here below you can see different examples:
 ```
-$ python -m sites T1_UK_RAL
-$ python -m sites "T1|T2"
-$ python -m transfers T1_UK_RAL -hr 8
-$ python -m transfers T1_UK_RAL -b T2_PL_Warsaw
+$ python -m tools status T1_UK_RAL
+$ python -m tools status "T1|T2"
+$ python -m tools status T1_UK_RAL --flavour CE
+$ python -m tools status T1_UK_RAL --hours 8
+$ python -m tools status T1_UK_RAL --blacklist T2_PL_Warsaw
 ```
 
 
@@ -181,9 +207,11 @@ See the [milestones](https://github.com/4quarks/CMS_Grid_Support/milestones) for
 You can also see the known [issues](https://github.com/4quarks/CMS_Grid_Support/issues). 
 If you have suggestions, please, do not hesitate to create new milestones and report issues! 
 
-#### Site Status 
-This is still under development but is already possible to get a full report of the sites' computing resources.
+#### Intelligent Sites Analysis
+This is still under development but the idea is to implement an intelligent system to detect, classify and report 
+site errors. 
 
+<!-- 
 - Install mongodb e.g. Ubuntu:
 ```
 wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | sudo apt-key add -
@@ -204,11 +232,7 @@ export MONGODB_HOST="localhost:27017"
 ```
 python -m spacy download en_core_web_lg
 ```
-1. Run vofeed.py to dump all data to mongodb
-2. Define the sites that you are not interested in. e.g. BLACKLIST_SITES = ["T2_PL_Warsaw"]
-3. Introduce site or the scope to analyze. AbstractSiteStatus(time_ss, site="T1|T2")
-4. Run site_status.py
-
+-->
 
 <!-- CONTRIBUTING -->
 ## Contributing

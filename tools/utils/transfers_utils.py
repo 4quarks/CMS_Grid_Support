@@ -3,7 +3,7 @@ import time
 import re
 import pandas as pd
 import logging
-from utils.constants import CteRucio
+from tools.utils.constants import CteRucio
 import xlsxwriter
 
 
@@ -143,7 +143,7 @@ class ExcelGenerator:
                 column_id_error = self.get_column_id(len(list_errors), num_columns_error)
 
                 # DF LEGEND GROUPS
-                columns_groups = ["group_id", "error_ref", "num_diff_errors", "num_failed_transfers"]
+                columns_groups = ["group_id", "error_ref", "num_diff_errors", "total_errors"]
                 start_column = num_columns_error + CteRucio.SEPARATION_COLUMNS
                 df_group = pd.DataFrame(list_groups, columns=columns_groups)
                 df_group.to_excel(writer, sheet_name=direction, startcol=start_column, index=False)

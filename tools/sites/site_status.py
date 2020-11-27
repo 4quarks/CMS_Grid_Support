@@ -1,15 +1,15 @@
 # coding=utf-8
 
-from sites.vofeed import get_resources_from_json
-from sites.sam3 import SAMTest
-from utils.constants import CteSAM as CteSAM
+from tools.sites.vofeed import get_resources_from_json
+from tools.sites.sam3 import SAMTest
+from tools.utils.constants import CteSAM as CteSAM
 import pandas as pd
 import time
 from abc import ABC
-from utils.query_utils import AbstractQueries, Time, timestamp_to_human_utc
-from utils.nlp_utils import group_data
+from tools.utils.query_utils import AbstractQueries, Time, timestamp_to_human_utc
+from tools.utils.nlp_utils import group_data
 from copy import deepcopy
-from utils.site_utils import get_resource_from_target
+from tools.utils.site_utils import get_resource_from_target
 
 """
 ---------------------------------------------------------------------------------
@@ -92,7 +92,7 @@ data.RemoveReason:/"Removed due to wall clock limit"/
 
 
 class SiteStatus(AbstractQueries, ABC):
-    def __init__(self, time_class, target="", str_freq="15min", blacklist_str="", specific_fields=None):
+    def __init__(self, time_class, target="", flavour="", str_freq="15min", blacklist_str="", specific_fields=None):
         super().__init__(time_class)
         self.index_name = CteSAM.INDEX_ES
         self.index_id = CteSAM.INDEX_ES_ID
@@ -101,8 +101,9 @@ class SiteStatus(AbstractQueries, ABC):
         self.str_freq = str_freq
 
         self.blacklist = blacklist_str
+        self.flavour = flavour
 
-        self.site_name, self.hostname, self.flavour = get_resource_from_target(target)
+        self.site_name, self.hostname = get_resource_from_target(target)
 
         self.site_resources = get_resources_from_json(site=self.site_name, hostname=self.hostname, flavour=self.flavour)
 

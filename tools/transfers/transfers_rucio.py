@@ -1,11 +1,11 @@
 # coding=utf-8
-from utils.constants import CteRucio
+from tools.utils.constants import CteRucio
 import time
 from copy import deepcopy
 from abc import ABC
-from utils.query_utils import AbstractQueries, Time
-from utils.transfers_utils import ExcelGenerator
-from utils.nlp_utils import group_data
+from tools.utils.query_utils import AbstractQueries, Time
+from tools.utils.transfers_utils import ExcelGenerator
+from tools.utils.nlp_utils import group_data
 import re
 
 """
