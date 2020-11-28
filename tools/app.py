@@ -35,11 +35,9 @@ def run_site_status(args):
 
 
 def run_site_readiness(args):
-    if not args.days and not args.hours and not args.minutes:
-        args.hours = CteSAM.HOURS_RANGE
     if not args.black:
         args.black = ""
-    time_ss = Time(days=args.days, hours=args.hours, minutes=args.minutes)
+    time_ss = Time(hours=CteSAM.HOURS_RANGE)
     sam = SiteReadiness(time_ss, site_regex=args.target, blacklist_regex=args.black)
     rows = sam.get_not_enabled_sites(metric=args.metric)
     columns = ["name"] + CteSAM.REF_METRICS_SR + ["detail"]

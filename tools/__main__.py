@@ -30,9 +30,6 @@ def main():
     parser_b = subparsers.add_parser('readiness', help='Generate an Excel file reporting all the not enabled sites')
     parser_b.add_argument("target", help="Site or hostname to analyze", type=str)
     parser_b.add_argument("-me", "--metric", help="Metric of interest (prod, crab or life) separated by '|'", type=str)
-    parser_b.add_argument("-hr", "--hours", help="Start analysis # hours ago", type=int)
-    parser_b.add_argument("-d", "--days", help="Start analysis # days ago", type=int)
-    parser_b.add_argument("-m", "--minutes", help="Start analysis # minutes ago", type=int)
     parser_b.add_argument("-b", "--black", help="Blacklisted sites separated by '|'", type=str)
 
     args = parser.parse_args()

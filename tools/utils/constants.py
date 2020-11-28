@@ -98,7 +98,7 @@ class CteSAM(Constants):
     REF_SAM_METRIC = "sam"
     REF_SR_METRIC = "sts"
 
-    REF_METRICS_SR = ["status", "prod_status", "crab_status", "manual_life", "manual_prod", "manual_crab"]
+    REF_METRICS_SR = ["life_status", "prod_status", "crab_status", "manual_life", "manual_prod", "manual_crab"]
 
     # SITE STATUS
     NUM_ERRORS_ROW = 8

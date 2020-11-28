@@ -244,6 +244,7 @@ class SiteReadiness(AbstractCMSSST):
         studied_sites = []
         for response in reversed(response_kibana_cmssst):
             data_response = response["data"]
+            data_response["life_status"] = data_response.pop("status")  # change key to keep structure <metric>_status
             site_name = data_response["name"]
             is_blacklisted = self.is_blacklisted(site_name)
 
@@ -269,13 +270,13 @@ class SiteReadiness(AbstractCMSSST):
 #                                                               "manual_prod", "manual_crab"])
 
 
-# if __name__ == "__main__":
-#
-#     time_ss = Time(hours=CteSAM.HOURS_RANGE)
-#     sam = SiteReadiness(time_ss, site_regex="T2")
-#     rows = sam.get_not_enabled_sites(metric="prod|crab")
-#     columns = ["name"] + CteSAM.REF_METRICS_SR + ["detail"]
-#     write_excel(rows, columns=columns, name_ref="testing" + "SiteReadiness")
-#     # sam.get_status(metrics=[Tests.SAM.metric, Tests.HammerCloud.metric])
-#     # errors = sam.get_issues_resources()
-#     print()
+if __name__ == "__main__":
+
+    time_ss = Time(hours=CteSAM.HOURS_RANGE)
+    sam = SiteReadiness(time_ss, site_regex="T2")
+    rows = sam.get_not_enabled_sites(metric="prod|life")
+    columns = ["name"] + CteSAM.REF_METRICS_SR + ["detail"]
+    write_excel(rows, columns=columns, name_ref="testing" + "SiteReadiness")
+    # sam.get_status(metrics=[Tests.SAM.metric, Tests.HammerCloud.metric])
+    # errors = sam.get_issues_resources()
+    print()

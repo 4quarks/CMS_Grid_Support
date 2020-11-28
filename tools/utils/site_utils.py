@@ -40,7 +40,7 @@ def write_excel(rows, columns, name_ref):
         writer.save()
         logging.info("Excel file created successfully")
     else:
-        logging.error("No results found. The Excel file was not created.")
+        logging.info("No results found. The Excel file was not created.")
 
 
 
