@@ -80,7 +80,7 @@ class Transfers(AbstractQueries, ABC):
         ############ CONSTRUCT THE QUERY ############
         kibana_query_failed = "data.vo:cms AND data.event_type:{}".format("transfer-failed")
         if hostname:
-            kibana_query_failed += CteRucio.ADD_DATA.format(direction + "_url", hostname)
+            kibana_query_failed += CteRucio.ADD_DATA_STR.format(direction + "_url", hostname)
         if site:
             kibana_query_failed += CteRucio.ADD_DATA.format(direction + "_rse", site)
         if filter_error_kibana:

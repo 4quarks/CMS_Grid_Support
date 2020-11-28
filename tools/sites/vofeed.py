@@ -6,6 +6,7 @@ from tools.utils.constants import Constants as Cte
 import json
 import requests
 import re
+from tools.utils.site_utils import get_type_resource
 
 """
 data.site 	T1_ES_PIC
@@ -72,6 +73,17 @@ def get_resources_from_json(site="", hostname="", flavour=""):
     return list_resources
 
 
+def get_unique_elements_from_json(target, type_resource=""):
+    if not type_resource:
+        type_resource = get_type_resource(target)
+    unique_resources = []
+    for resource in ALL_RESOURCES:
+        feature = resource[type_resource]
+        if re.search(target.lower(), feature.lower()) and feature not in unique_resources:
+            unique_resources.append(feature)
+    return unique_resources
+
+
 class VOFeed(AbstractQueries, ABC):
     def __init__(self, time):
         super().__init__(time)
@@ -128,5 +140,6 @@ class SiteCapacity(AbstractQueries, ABC):
         return attr_capacity
 
 
-if __name__ == "__main__":
-    pass
+# if __name__ == "__main__":
+#     a = get_unique_elements_from_json("T2")
+#     print()
