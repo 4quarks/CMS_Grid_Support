@@ -183,12 +183,12 @@ $ python -m tools transfers T1_UK_RAL --write_lfns
 \* If there are user errors it automatically creates a table with the usernames. 
 
 ### Site Status
-Running the `sites` module you will write an Excel file with the SAM errors of 
+Running the `status` module you will write an Excel file with the SAM errors of 
 the target computing resource or site for a certain period (--hours/--days/--minutes, default 5h).
 You can specify the flavour (--flavour) as well as the blacklisted sites and hosts (--blacklist). 
 
 ```
-$ python -m tools sites -h
+$ python -m tools status -h
 ```
 Here below you can see different examples:
 ```
@@ -199,6 +199,21 @@ $ python -m tools status T1_UK_RAL --hours 8
 $ python -m tools status T1_UK_RAL --blacklist T2_PL_Warsaw
 ```
 
+### Site Readiness
+Running the `readiness` module you will write an Excel file with the non enabled states of 
+the target sites. Therefore, if the sites are fully enabled you won't get any result.
+You can specify the metric of interest (--metric) as well as the blacklisted sites and hosts (--blacklist). 
+
+```
+$ python -m tools readiness -h
+```
+Here below you can see different examples:
+```
+$ python -m tools readiness T1_UK_RAL
+$ python -m tools readiness "T1|T2"
+$ python -m tools readiness T1_UK_RAL --metric "prod|crab|life"
+$ python -m tools readiness T1_UK_RAL --blacklist "Warsaw|ITEP"
+```
 
 <!-- ROADMAP -->
 ## Roadmap

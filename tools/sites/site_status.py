@@ -3,13 +3,12 @@
 from tools.sites.vofeed import get_resources_from_json
 from tools.sites.sam3 import SAMTest
 from tools.utils.constants import CteSAM as CteSAM
-import pandas as pd
-import time
 from abc import ABC
 from tools.utils.query_utils import AbstractQueries, Time, timestamp_to_human_utc
 from tools.utils.nlp_utils import group_data
 from copy import deepcopy
-from tools.utils.site_utils import get_resource_from_target
+from tools.utils.site_utils import get_resource_from_target, write_excel
+import re
 
 """
 ---------------------------------------------------------------------------------
@@ -91,17 +90,48 @@ data.RemoveReason:/"Removed due to wall clock limit"/
 """
 
 
-class SiteStatus(AbstractQueries, ABC):
-    def __init__(self, time_class, target="", flavour="", str_freq="15min", blacklist_str="", specific_fields=None):
+class AbstractCMSSST(AbstractQueries, ABC):
+    def __init__(self, time_class, metric, str_freq="15min", blacklist_regex=""):
         super().__init__(time_class)
         self.index_name = CteSAM.INDEX_ES
         self.index_id = CteSAM.INDEX_ES_ID
-
-        self.specific_fields = specific_fields
+        self.metric = metric
         self.str_freq = str_freq
+        self.blacklist_regex = blacklist_regex
 
-        self.blacklist = blacklist_str
-        self.flavour = flavour
+    @staticmethod
+    def get_ref_flavour(flavour):
+        ref_flavour = flavour
+        if "CE" in flavour:
+            ref_flavour = "CE"
+        if "XROOTD" in flavour:
+            ref_flavour = "XRD"
+        return ref_flavour
+
+    def is_blacklisted(self, target):
+        is_blacklisted = False
+        if self.blacklist_regex and re.search(self.blacklist_regex.lower(), target.lower()):
+            is_blacklisted = True
+        return is_blacklisted
+
+    def get_kibana_query(self, metric, name="", dict_features=None):
+        kibana_query = "metadata.path:" + metric + self.str_freq
+        if name:
+            kibana_query += CteSAM.ADD_DATA.format("name", name)
+
+        if dict_features:
+            for key, value in dict_features.items():
+                if key:
+                    kibana_query += CteSAM.ADD_DATA.format(key, value)
+
+        return kibana_query
+
+
+class SiteStatus(AbstractCMSSST):
+    def __init__(self, time_class, target="", flavour="", blacklist_regex=""):
+        super().__init__(time_class, CteSAM.REF_SAM_METRIC, blacklist_regex=blacklist_regex)
+
+        self.flavour = self.get_ref_flavour(flavour)
 
         self.site_name, self.hostname = get_resource_from_target(target)
 
@@ -109,21 +139,8 @@ class SiteStatus(AbstractQueries, ABC):
 
         self.sam3 = SAMTest(time_class)
 
-    def get_kibana_query(self, metric, status="", name="", flavour=""):
-        if "CE" in flavour:
-            flavour = "CE"
-        if "XROOTD" in flavour:
-            flavour = "XRD"
-        kibana_query = "metadata.path:" + metric + self.str_freq
-        if name:
-            kibana_query += CteSAM.AND + "data.name:" + name
-        if status:
-            kibana_query += CteSAM.AND + "data.status:" + status
-        if flavour:
-            kibana_query += CteSAM.AND + "data.type:" + flavour
-        return kibana_query
-
-    def get_issues(self, response_all):
+    @staticmethod
+    def get_issues(response_all):
         list_errors, all_status = [], []
         num_status_row, num_errors = 0, 0
         for num_test, test in enumerate(response_all):
@@ -155,10 +172,11 @@ class SiteStatus(AbstractQueries, ABC):
             site = resource[CteSAM.REF_SITE]
 
             is_test_endpoint = "production" in resource.keys()
-            is_blacklisted = site in self.blacklist
+            is_blacklisted = self.is_blacklisted(site)
 
             if not is_test_endpoint and not is_blacklisted:
-                kibana_query_all = self.get_kibana_query("sam", name=hostname, flavour=flavour)
+                features_search = {"type": flavour}
+                kibana_query_all = self.get_kibana_query(self.metric, name=hostname, dict_features=features_search)
                 response_kibana_cmssst = self.get_direct_response(kibana_query=kibana_query_all)
                 if response_kibana_cmssst:
                     status, list_errors, num_errors_row, num_not_ok_tests = self.get_issues(response_kibana_cmssst)
@@ -193,22 +211,54 @@ class SiteStatus(AbstractQueries, ABC):
                                  str(list_errors), None, None])
         return rows
 
-    def write_excel(self, rows):
-        columns = [CteSAM.REF_TIMESTAMP_HR, CteSAM.REF_SITE, CteSAM.REF_HOST, CteSAM.REF_FLAVOUR, CteSAM.REF_STATUS,
-                   'num_row_failures', 'num_failed_tests', 'failed_test', CteSAM.REF_LOG, CteSAM.REF_NUM_ERRORS]
-        timestamp_now = round(time.time())
-        file_name = "{}_{}".format(timestamp_now, "SiteStatus")
-        writer = pd.ExcelWriter(file_name + ".xlsx", engine='xlsxwriter')
-        df_group = pd.DataFrame(rows, columns=columns)
-        df_group.to_excel(writer, index=False)
-        writer.save()
 
+class SiteReadiness(AbstractCMSSST):
+    def __init__(self, time_class, site_regex="", blacklist_regex=""):
+        super().__init__(time_class, CteSAM.REF_SR_METRIC, blacklist_regex=blacklist_regex)
 
-class TestsAbstract:
-    def __init__(self, metric, specific_fields=None):
-        self.metric = metric
-        self.specific_fields = specific_fields
+        if not site_regex:
+            site_regex = "*"
+        self.site_regex = site_regex
 
+    @staticmethod
+    def site_enabled(dict_site, metric):
+        site_enabled = True
+        if metric in dict_site.keys():
+            status = dict_site[metric]
+            if status != "enabled":
+                site_enabled = False
+        return site_enabled
+
+    def get_not_enabled_sites(self, metric=""):
+        rows, metrics = [], CteSAM.REF_METRICS_SR
+
+        if metric:
+            desired_metrics = [sr_m for m in metric.split("|") for sr_m in CteSAM.REF_METRICS_SR if re.search(m, sr_m)]
+            if desired_metrics:
+                metrics = desired_metrics
+        # for site in self.sites_list:
+
+        kibana_query_all = self.get_kibana_query(self.metric, name=self.site_regex)
+        response_kibana_cmssst = self.get_direct_response(kibana_query=kibana_query_all)
+
+        studied_sites = []
+        for response in reversed(response_kibana_cmssst):
+            data_response = response["data"]
+            data_response["life_status"] = data_response.pop("status")  # change key to keep structure <metric>_status
+            site_name = data_response["name"]
+            is_blacklisted = self.is_blacklisted(site_name)
+
+            if site_name not in studied_sites and not is_blacklisted:
+                studied_sites.append(site_name)
+                site_with_issues = False
+
+                for metric in metrics:
+                    if not self.site_enabled(data_response, metric):
+                        site_with_issues = True
+                        break
+                if site_with_issues:
+                    rows.append(data_response)
+        return rows
 
 # class Tests:
 #     SAM = TestsAbstract(metric="sam")
@@ -220,10 +270,13 @@ class TestsAbstract:
 #                                                               "manual_prod", "manual_crab"])
 
 
-# if __name__ == "__main__":
-#
-#     time_ss = Time(hours=CteSAM.HOURS_RANGE)
-#     sam = SiteStatus(time_ss, target="T1|T2", blacklist_str="T2_PL_Warsaw/T2_RU_ITEP")
-#     # sam.get_status(metrics=[Tests.SAM.metric, Tests.HammerCloud.metric])
-#     errors = sam.get_issues_resources()
-#     print()
+if __name__ == "__main__":
+
+    time_ss = Time(hours=CteSAM.HOURS_RANGE)
+    sam = SiteReadiness(time_ss, site_regex="T2")
+    rows = sam.get_not_enabled_sites(metric="prod|life")
+    columns = ["name"] + CteSAM.REF_METRICS_SR + ["detail"]
+    write_excel(rows, columns=columns, name_ref="testing" + "SiteReadiness")
+    # sam.get_status(metrics=[Tests.SAM.metric, Tests.HammerCloud.metric])
+    # errors = sam.get_issues_resources()
+    print()

@@ -1,10 +1,12 @@
 # coding=utf-8
+
 import requests
 import os
 import json
 from copy import deepcopy
 import datetime
 from abc import ABC
+from tools.utils.constants import Constants, logging
 
 
 FIRST_QUERY = {
@@ -46,7 +48,7 @@ def unique_elem_list(list_repeated_elem):
 def timestamp_to_human_utc(timestamp):
     human_time = ""
     if "int" in str(type(timestamp)):
-        human_time = datetime.datetime.utcfromtimestamp(timestamp/1000).strftime('%d-%m-%Y %H:%M')
+        human_time = datetime.datetime.utcfromtimestamp(timestamp / 1000).strftime('%d-%m-%Y %H:%M')
     return human_time
 
 
@@ -106,7 +108,8 @@ class Time:
         self.minutes = minutes
         self.seconds = seconds
         self.time_slot = self.translate_time()
-        self.time_slot_hr = [self.datetime_to_human(self.time_slot[0]), self.datetime_to_human(self.time_slot[1])]
+        self.time_slot_hr = [self.timestamp_to_human(self.time_slot[0]), self.timestamp_to_human(self.time_slot[1])]
+        self.time_slot_iso = [self.timestamp_to_iso(self.time_slot[0]), self.timestamp_to_iso(self.time_slot[1])]
 
     def translate_time(self):
         now_datetime = datetime.datetime.utcnow()
@@ -116,8 +119,11 @@ class Time:
         min_time = round(datetime.datetime.timestamp(previous_datetime)) * 1000
         return [min_time, max_time]
 
-    def datetime_to_human(self, timestamp):
-        return datetime.datetime.utcfromtimestamp(int(timestamp/1000)).strftime('%d-%m-%Y %H:%M')
+    def timestamp_to_human(self, timestamp):
+        return datetime.datetime.utcfromtimestamp(int(timestamp / 1000)).strftime('%d-%m-%Y %H:%M')
+
+    def timestamp_to_iso(self, timestamp):
+        return datetime.datetime.utcfromtimestamp(int(timestamp / 1000)).isoformat()
 
 
 class AbstractQueries(ABC):
@@ -146,6 +152,12 @@ class AbstractQueries(ABC):
             clean_str_query = get_str_lucene_query(self.index_name,
                                                    self.time_class.time_slot[0], self.time_class.time_slot[1],
                                                    raw_query, max_results)
+
+            logging.info("Kibana query: " + kibana_query)
+            kibana_link = Constants.KIBANA.format(self.time_class.time_slot_iso[0], self.time_class.time_slot_iso[1],
+                                                  self.index_name, kibana_query)
+
+            logging.info("Kibana link: " + kibana_link)
         return clean_str_query
 
     def get_response(self, clean_query):
@@ -161,7 +173,7 @@ class AbstractQueries(ABC):
                     'dst_url': 'gsiftp://se.cis.gov.pl:2811/,
                     ...
         """
-        url = "https://monit-grafana.cern.ch/api/datasources/proxy/" + self.index_id + "/_msearch"
+        url = Constants.GRAFANA.format(self.index_id)
         headers = {'Content-Type': 'application/json', 'Authorization': os.environ["GRAFANA_KEY"]}
         raw_response = requests.request("POST", url, headers=headers, data=clean_query).text.encode('utf8')
         if "Unauthorized" in str(raw_response):
@@ -180,4 +192,3 @@ class AbstractNLP:
 
     def preprocess_string_nlp(self, text):
         return text.lower().strip()
-

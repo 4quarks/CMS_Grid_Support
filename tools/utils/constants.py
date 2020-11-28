@@ -1,4 +1,9 @@
 # coding=utf-8
+import logging
+
+logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p',
+                    level=logging.INFO)
+
 
 class Constants:
     AND = ' AND '
@@ -6,7 +11,8 @@ class Constants:
     QUOTE = "\""
     INCLUDED = ".*{}.*"
     EXPRESSION = "/{}/"
-    ADD_DATA = " AND data.{}:/.*\"{}\".*/"
+    ADD_DATA_STR = " AND data.{}:/.*\"{}\".*/"
+    ADD_DATA = " AND data.{}:/.*{}.*/"
 
     # COMMON
     REF_NUM_ERRORS = "num_errors"
@@ -58,12 +64,18 @@ class Constants:
     REF_LFN_DST = "dst_lfn"
     REF_USER = "user"
 
+    # LINKS
+    KIBANA = "https://monit-kibana.cern.ch/kibana/app/kibana#/discover?_g=(refreshInterval:(pause:!t,value:0)," \
+             "time:(from:'{}.000Z',to:'{}.000Z'))&_a=(columns:!(_source),index:'{}',interval:auto," \
+             "query:(language:lucene,query:'{}'),sort:!(metadata.timestamp,desc))"
+    GRAFANA = "https://monit-grafana.cern.ch/api/datasources/proxy/{}/_msearch"
+
 
 class CteRucio(Constants):
     REF_LOG = "purged_reason"
     REF_TRANSFER_ID = "transfer_id"
 
-    INDEX_ES = "monit_prod_cms_rucio_enr*"
+    INDEX_ES = "monit_prod_cms_rucio_enr_*"
     INDEX_ES_ID = "9732"
 
 
@@ -83,6 +95,11 @@ class CteSAM(Constants):
     REF_LOG_CMSSST = "detail"
     REF_STATUS = "status"
 
+    REF_SAM_METRIC = "sam"
+    REF_SR_METRIC = "sts"
+
+    REF_METRICS_SR = ["life_status", "prod_status", "crab_status", "manual_life", "manual_prod", "manual_crab"]
+
     # SITE STATUS
     NUM_ERRORS_ROW = 8
     HOURS_RANGE = 5
@@ -91,5 +108,5 @@ class CteSAM(Constants):
     PERCENT_MIN_OK = 0.7  # 20 --> 14
     NUM_MIN_OK = int(HOURS_RANGE * NUM_TESTS_PER_HOUR * PERCENT_MIN_OK)
 
-    INDEX_ES = "monit_prod_cmssst*"
+    INDEX_ES = "monit_prod_cmssst_*"
     INDEX_ES_ID = "9475"
