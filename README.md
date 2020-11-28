@@ -51,7 +51,13 @@
         <li><a href="#installation">Installation</a></li>
       </ul>
     </li>
-    <li><a href="#usage">Usage</a></li>
+    <li><a href="#usage">Usage</a>
+        <ul>
+            <li><a href="#transfers">Transfers</a></li>
+            <li><a href="#site-status">Site Status</a></li>
+            <li><a href="#site-readiness">Site Readiness</a></li>
+        </ul>
+    </li>
     <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
@@ -65,7 +71,7 @@
 ## About The Project
 
 <!-- [![Product Name Screen Shot][product-screenshot]](https://example.com) -->
-We developed a collection of scripts for developers and site admins. 
+We have created a collection of scripts for developers and site admins. 
 The main purpose is to reduce the monitoring time consuming and empowering utilities to assist sites.
 Furthermore, collect errors information for analysis purposes. 
 
@@ -146,7 +152,7 @@ This is an example of how to list things you need to use the software and how to
 
 <!-- USAGE EXAMPLES -->
 ## Usage
-You can see the functionalities:
+You can explore the functionalities:
 ```
 $ python -m tools -h
 ```
