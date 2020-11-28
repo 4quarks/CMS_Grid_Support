@@ -94,23 +94,21 @@ CMS_Grid_Support
     ├── sites
     │   ├── __init__.py
     │   ├── jobs.py
-    │   ├── __main__.py
     │   ├── sam3.py
     │   ├── site_status.py
     │   └── vofeed.py
     ├── transfers
     │   ├── __init__.py
-    │   ├── __main__.py
     │   ├── transfers.py
     │   └── transfers_rucio.py
     └── utils
         ├── constants.py
         ├── __init__.py
-        ├── mongotools.py
         ├── nlp_utils.py
         ├── query_utils.py
         ├── site_utils.py
         └── transfers_utils.py
+
 ```
 
 <!-- GETTING STARTED -->
