@@ -1,4 +1,5 @@
 # coding=utf-8
+
 import logging
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p',
@@ -6,13 +7,22 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', datefmt=
 
 
 class Constants:
+    VERSION = "0.0.1"
+    AUTHOR = 'Pau-4quarks'
+    CREDIT = 'CMS (Compact Muon Solenoid)\nCERN (European Organization for Nuclear Research)'
+    EMAIL = '4quarks_cms@protonmail.com'
+    PACKAGE_NAME = 'cms_support'
+    URL_PROJECT = 'https://github.com/4quarks/CMS_Grid_Support/'
+
     AND = ' AND '
     AND_SIGN = '&'
     QUOTE = "\""
     INCLUDED = ".*{}.*"
     EXPRESSION = "/{}/"
-    ADD_DATA_STR = " AND data.{}:/.*\"{}\".*/"
-    ADD_DATA = " AND data.{}:/.*{}.*/"
+    ADD_STR = "\"{}\""
+    ADD_DATA = " AND {} data.{}:/.*{}.*/"
+    ADD_NOT_DATA = " AND NOT data.{}:/.*{}.*/"
+    NOT = "NOT"
 
     # COMMON
     REF_NUM_ERRORS = "num_errors"
@@ -43,8 +53,8 @@ class Constants:
                        'idle timeout: closing control connection',
                        'system error in write into hdfs', 'system error in reading from hdfs',
                        'reports could not open connection to', 'closing xrootd file handle',
-                       'failed to read checksum file',
-                       'invalid request type for token',
+                       'failed to read checksum file', 'SRM_NO_FREE_SPACE',
+                       'invalid request type for token', 'IPC failed while attempting to perform request',
                        'copy failed with mode 3rd push',
                        'unable to build the turl for the provided transfer protocol',
                        'connection reset by peer', 'site busy: too many queued requests',
@@ -54,7 +64,7 @@ class Constants:
                        'unable to read replica', 'srm_file_busy', 'general problem: problem while connected',
                        'system error in connect: connection timed out', 'invalid request descriptor',
                        'failed to deliver poolmgrselectwritepoolmsg', 'a system call failed: broken pipe',
-                       'no free space on storage area', 'commands denied']
+                       'no free space on storage area', 'commands denied', 'All pools are full']
 
     REF_PFN_SRC = "src_url"
     REF_PFN_DST = "dst_url"
@@ -65,7 +75,9 @@ class Constants:
     REF_USER = "user"
 
     # LINKS
-    KIBANA = "https://monit-kibana.cern.ch/kibana/app/kibana#/discover?_g=(refreshInterval:(pause:!t,value:0)," \
+    SOURCE_KIBANA = "monit-kibana.cern.ch"
+    SOURCE_KIBANA_ACC = "monit-kibana-acc.cern.ch"
+    KIBANA = "https://{}/kibana/app/kibana#/discover?_g=(refreshInterval:(pause:!t,value:0)," \
              "time:(from:'{}.000Z',to:'{}.000Z'))&_a=(columns:!(_source),index:'{}',interval:auto," \
              "query:(language:lucene,query:'{}'),sort:!(metadata.timestamp,desc))"
     GRAFANA = "https://monit-grafana.cern.ch/api/datasources/proxy/{}/_msearch"
@@ -89,8 +101,22 @@ class CteFTS(Constants):
 
 
 class CteSAM(Constants):
-    KEYWORDS_ERRORS = ["no servers are available to read the file", "ncat: connection refused",
-                       'cream_delegate error', 'operation not permitted']
+    KEYWORD_SRM = ['SRM_INVALID_PATH', 'SRM_TOO_MANY_RESULTS', 'reports could not open connection to', 'METRIC FAILED',
+                   'No such file or directory', 'System error in connect', "didn't send expected files",
+                   'HTCondor-CE held job due to no matching routes, route job limit, or route failure threshold',
+                   'Protocol(s) not supported']
+    KEYWORD_CE = ['SYSTEM_PERIODIC_HOLD', 'New jobs are not allowed', 'No route to host', 'Killed CMSSW child',
+                  'XRootDStatus.code=206 "[ERROR] Operation expired"', 'Unspecified gridmanager error',
+                  'Local Stage Out Failed', 'Error sending files to schedd', 'Error connecting to schedd',
+                  'LogicalFileNameNotFound', 'PERMISSION_DENIED', '[3011] No servers are available to read the file',
+                  'Attempts to submit failed', 'Socket timed out on send/recv operation']
+    KEYWORD_XRD = ['Ncat: Connection refused', 'Ncat: Connection timed out', 'invalid argument', 'Auth failed',
+                   'Network is unreachable', 'Permission denied' 'Name or service not known']
+    KEYWORDS_ERRORS = KEYWORD_SRM + KEYWORD_CE + KEYWORD_XRD
+
+    NON_INTERESTING_TESTS = 'SE-xrootd-version|WN-cvmfs|DNS-IPv6|SRM-VOLsDir|SRM-VOLs|' \
+                            'SRM-VODel|SRM-GetPFNFromTFC|SRM-VOGetTURLs|SRM-AllCMS'
+
     REF_LOG = "details"
     REF_LOG_CMSSST = "detail"
     REF_STATUS = "status"

@@ -3,7 +3,10 @@
 import re
 import pandas as pd
 import time
-from tools.utils.constants import logging
+from cms_support.utils.constants import logging
+from abc import ABC
+from cms_support.utils.query_utils import AbstractQueries
+from cms_support.utils.constants import CteSAM as CteSAM
 
 
 def get_type_resource(target):
@@ -43,5 +46,24 @@ def write_excel(rows, columns, name_ref):
         logging.info("No results found. The Excel file was not created.")
 
 
+class AbstractCMSSST(AbstractQueries, ABC):
+    def __init__(self, time_class, metric, str_freq="15min", target="", blacklist_regex=""):
+        super().__init__(time_class, target, blacklist_regex)
+        self.index_name = CteSAM.INDEX_ES
+        self.index_id = CteSAM.INDEX_ES_ID
+        self.metric = metric
+        self.str_freq = str_freq
+        self.basic_kibana_query = "metadata.path:" + self.metric + self.str_freq
+
+
+
+    @staticmethod
+    def get_ref_flavour(flavour):
+        ref_flavour = flavour
+        if "CE" in flavour:
+            ref_flavour = "CE"
+        if "XROOTD" in flavour:
+            ref_flavour = "XRD"
+        return ref_flavour
 
 

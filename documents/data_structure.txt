@@ -1,0 +1,368 @@
+
+"""
+SITE STATUS
+---------------------------------------------------------------------------------
+sts15min
+----------
+data.name 	T1_DE_KIT
+
+metadata.path 	sts15min
+
+data.status 	enabled   --> life status
+data.prod_status 	drain
+data.crab_status 	enabled
+
+data.manual_life 	enabled
+data.manual_prod 	disabled
+data.manual_crab 	enabled
+
+data.detail 	Life: manual override by rmaciula (Tier-1s are never put into Waiting Room or Morgue state),
+                Prod: Emerging downtime, [current],
+                Crab: manual override by lammel (very few CRAB jobs currently being scheduled at KIT)
+
+
+---------------------------------------------------------------------------------
+metadata.path 	down15min
+
+data.detail 	All CEs (ce-1.grid.vbc.ac.at), all XROOTDs (eos.grid.vbc.ac.at)
+data.duration 	1,603,346,400, 1,603,807,200
+data.status 	downtime
+
+---------------------------------------------------------------------------------
+fts15min, sam15min, hc15min, sr15min --> "15min", "1hour", "6hour", "1day"
+----------
+data.detail 	3 Success [crab3@vocms0137.cern.ch#55922252.0#1601902070 201005_001640:sciaba_crab_ .....
+data.name 	T2_IT_Bari
+data.status 	ok
+metadata.path 	hc15min
+-------------
+data.detail 	org.cms.SE-xrootd-read (error)
+data.name 	grid71.phy.ncu.edu.tw
+data.status 	error
+data.type 	XRD
+metadata.path 	sam15min
+
+data.name 	T2_IT_Rome
+data.detail 	cmsrm-cream01.roma1.infn.it/CE (unknown)
+                cmsrm-cream02.roma1.infn.it/CE (unknown)
+                cmsrm-se01.roma1.infn.it/SRM (unknown)
+                cmsrm-xrootd01.roma1.infn.it/XRD (unknown)
+                cmsrm-xrootd02.roma1.infn.it/XRD (unknown)
+
+
+metadata.path 	sr1hour
+data.detail 	SAM: ok (15min evaluations: 4 ok, 0 warning, 0 error, 0 unknown, 0 downtime (0h0m)),
+                HC: ok (7 Success ...; 1 Success, no Chirp ExitCode ...),
+                FTS: ok (Links: 9/9 ok, 0/3 warning, 0/0 error, 1/1 unknown, 0/0 bad-endpoint; storage01.cscs.ch: ok/ok)
+data.value 	0.75
+
+-------------
+data.detail 	trn_timeout: 34 files, 0.0 GB [https://fts3.cern.ch:8449/fts3/ftsmon/#/job/3b664b36-070c-11eb...]
+                trn_error: 32 files, 0.0 GB [https://fts3.cern.ch:8449/fts3/ftsmon/#/job/d518140c-070d-11eb-a...]
+                dst_space: 3 files, 0.0 GB [https://fts3.cern.ch:8449/fts3/ftsmon/#/job/66147c40-070c-11eb-91...]
+data.name 	cmsio.rc.ufl.edu___eoscmsftp.cern.ch
+data.quality 	0
+data.status 	error
+data.type 	link
+metadata.path 	fts15min
+
+---------------------------------------------------------------------------------
+HC find job with error:
+https://monit-kibana.cern.ch/kibana/goto/d9b1f68e937ac932bd1cd5941541b4a5
+https://monit-kibana.cern.ch/kibana/goto/beceac1344613eeeba9d95edba4c97be
+
+data.GlobalJobId:"crab3@vocms0197.cern.ch#57013833.0#1602556487"
+data.CRAB_Workflow:"201012_164326:sciaba_crab_HC-98-T2_AT_Vienna-93179-20201012183702"
+data.ExitCode:139
+data.RemoveReason:/"Removed due to wall clock limit"/
+"GlobalPool periodic cleanup" --> data.ExitCode:143
+
+"""
+
+
+
+VO-FEED
+"""
+data.site 	T1_ES_PIC
+metadata.path 	vofeed15min
+
+data.services 	{
+                  "hostname": "xrootd01-cmst1.pic.es",
+                  "flavour": "XROOTD",
+                  "endpoint": "xrootd01-cmst1.pic.es:1095"
+                },
+                {
+                  "hostname": "xrootd02-cmst1.pic.es",
+                  "flavour": "XROOTD",
+                  "endpoint": "xrootd02-cmst1.pic.es:1095"
+                },
+                {
+                  "hostname": "llrppce.in2p3.fr",
+                  "flavour": "HTCONDOR-CE",
+                  "endpoint": "llrppce.in2p3.fr:9619",
+                  "production": false
+                }
+data.tier 	1
+data.vo 	CMS
+metadata.producer 	cmssst
+
+---------------------------------------------------------------------------------
+data.name 	T2_IT_Bari
+metadata.path 	scap15min
+
+data.core_cpu_intensive 	1,250
+data.core_io_intensive 	25
+data.core_max_used 	2,000
+data.core_production 	547
+data.core_usable 	1,000
+data.disk_experiment_use 	1
+data.disk_pledge 	500
+data.disk_usable 	500
+data.hs06_per_core 	10
+data.hs06_pledge 	10,000
+data.tape_pledge 	0
+data.tape_usable 	0
+data.when 	2020-Jan-17 22:12:00
+data.who 	lammel
+data.wlcg_federation_fraction 	1
+data.wlcg_federation_name 	Austrian Tier-2 Federation
+
+"""
+
+TRANSFERS RUCIO
+
+
+"""
+######################## monit_prod_cms_rucio_enr*  ########################
+query = "data.name:T2_US_Florida AND data.status:ok AND metadata.path:hc15min"
+rucio_index = {"name": "monit_prod_cms_rucio_enr*", "id": "9732"}
+
+data.dst_rse 	T2_KR_KISTI
+data.src_rse 	T2_US_Wisconsin
+
+data.activity 	Production Output|User Subscriptions
+data.bytes 	111,809,924
+data.file_size 	111,809,924
+data.checksum_adler 	c88b8895
+data.file_id 	2867026540
+data.name 	/store/mc/RunIIAutumn18NanoAODv7/VBFHHTo2G2ZTo2G.../x.root
+data.src_url 	srm://gfe02.grid.hep.ph.ic.ac.uk:8443/srm/managerv2?SFN=/pnfs/hep.ph.ic.ac.uk/data/cms/.../tree_54.root
+data.dst_url 	srm://stormfe1.pi.infn.it:8444/srm/managerv2?SFN=/cms/.../tree_54.root
+
+-------------------- SUBMITTED -------------------------------
+data.event_type     transfer-submitted
+data.state 	SUBMITTED
+
+data.external_host 	https://fts3.cern.ch:8446
+data.queued_at 	2020-10-06 12:58:45.839821
+data.request_type 	transfer
+data.scope 	cms
+data.vo 	cms
+metadata.producer 	cms_rucio
+-------------------- FAILED -------------------------------
+data.event_type     transfer-failed
+data.state	unknown
+data.purged_reason 	DESTINATION [17] Destination file exists and overwrite is not enabled
+data.reason 	DESTINATION [17] Destination file exists and overwrite is not enabled
+
+-------------------- OK -------------------------------
+data.event_type     transfer-done
+
+data.activity Functional Test
+data.event_type transfer-done
+
+https://monit-kibana.cern.ch/kibana/goto/4d07f14fec64999b3116ea4cac849e0f
+
+"""
+
+
+TRANSFERS
+
+"""
+######################## monit_prod_cms_rucio_enr*  ########################
+query = "data.name:T2_US_Florida AND data.status:ok AND metadata.path:hc15min"
+rucio_index = {"name": "monit_prod_cms_rucio_enr*", "id": "9732"}
+
+data.dst_rse 	T2_KR_KISTI
+data.src_rse 	T2_US_Wisconsin
+
+data.activity 	Production Output|User Subscriptions
+data.bytes 	111,809,924
+data.file_size 	111,809,924
+data.checksum_adler 	c88b8895
+data.file_id 	2867026540
+
+-------------------- SUBMITTED -------------------------------
+data.event_type     transfer-submitted
+data.state 	SUBMITTED
+
+data.external_host 	https://fts3.cern.ch:8446
+data.name 	/store/mc/RunIIAutumn18NanoAODv7/VBFHHTo2G2ZTo2G.../x.root
+data.queued_at 	2020-10-06 12:58:45.839821
+data.request_type 	transfer
+data.scope 	cms
+data.vo 	cms
+metadata.producer 	cms_rucio
+-------------------- FAILED -------------------------------
+data.event_type     transfer-failed
+data.state	unknown
+data.purged_reason 	DESTINATION [17] Destination file exists and overwrite is not enabled
+data.reason 	DESTINATION [17] Destination file exists and overwrite is not enabled
+
+-------------------- OK -------------------------------
+data.event_type     transfer-done
+data.state	unknown
+
+data.transfer_endpoint 	https://fts3.cern.ch:8446
+data.src_url 	srm://gfe02.grid.hep.ph.ic.ac.uk:8443/srm/managerv2?SFN=/pnfs/hep.ph.ic.ac.uk/data/cms/.../tree_54.root
+data.dst_url 	srm://stormfe1.pi.infn.it:8444/srm/managerv2?SFN=/cms/.../tree_54.root
+data.source_se 	srm://dcache-se-cms.desy.de
+data.dest_se 	gsiftp://gridftp.accre.vanderbilt.edu
+data.name 	/store/.../tree_54.root
+"""
+"""
+##################################### monit_prod_fts_raw_* ###########################
+
+query = "data.vo:cms AND data.dest_se:/.*se.cis.gov.pl.*/ AND data.job_state:FAILED"
+fts_index = {"name": "monit_prod_fts_raw_*", "id": "9233"}
+
+query = "data.dst_url:/.*storm-fe-cms.cr.cnaf.infn.it.*/ AND data.file_state:FAILED AND data.reason:/.*CHECKSUM MISMATCH.*/"
+
+class TransferAttributes:
+    attr_destination = "data.dst_url:"
+    attr_source = "data.src_url:"
+    attr_status = "data.file_state:"
+    attr_reason = "data.reason:"
+
+
+class Status:
+    error = "FAILED"
+    active = "ACTIVE"
+    ready = "READY"
+    submitted = "SUBMITTED"
+    finished = "FINISHED"
+
+def join_attribute_and_expression(self, attr, expression):
+    return CteFTS.AND + attr + CteFTS.EXPRESSION.format(CteFTS.INCLUDED.format(expression))
+
+def get_query(self, dst_url="", dst_protocol="", src_url="", src_protocol="", status="", reason=""):
+    raw_query = "data.vo:cms"
+    if dst_url:
+        raw_query += self.join_attribute_and_expression(self.attr_destination, dst_url)
+    if status:
+        raw_query += CteFTS.AND + self.attr_status + status
+
+    clean_str_query = get_str_lucene_query(self.index['name'], self.time_slot[0], self.time_slot[1], raw_query)
+    return clean_str_query
+
+https://monit-kibana.cern.ch/kibana/goto/31129642d019649a5fe8ee3c816677e6
+"""
+
+
+JOBS
+
+"""
+data.CRAB_PostJobStatus  Running|failed|finished
+data.Type 	test|production|analysis
+
+
+data.CRAB_Workflow       201006_002410:sciaba_crab_HC-98-T2_CH_CSCS-93080-20201004141101
+
+------------------------------------------------
+data.CRAB_PostJobStatus 	Running
+data.Status 	Running
+
+_id 	crab3@vocms0107.cern.ch#59356655.0#1601911341#1601912162
+data.CMSGroups 	/cms/GGUSExpert, /cms, T3_US_TAMU, /cms/TEAM, T3_US_FNALLPC, /cms/ALARM
+data.CMSPrimaryDataTier 	AODSIM
+data.CMSSWVersion 	9_2_6
+data.CMS_CampaignType 	UNKNOWN
+data.CMS_JobType 	Analysis
+data.CMS_Pool 	Global
+data.CMS_SubmissionTool 	CRAB
+data.CMS_WMTool 	HammerCloud
+data.CRAB_DataBlock 	/GenericTTbar/HC-CMSSW_9_2_6_91X_mcRun1_realistic_v2-v2/AODSIM#3517e1b6-76e3-11e7-a0c8-02163e00d7b3
+data.CRAB_Retry 	0
+data.CRAB_UserHN 	sciaba
+data.CRAB_Workflow 	201004_231110:sciaba_crab_HC-95-T2_US_MIT-93085-20201005005702
+data.DESIRED_CMSDataset 	/GenericTTbar/HC-CMSSW_9_2_6_91X_mcRun1_realistic_v2-v2/AODSIM
+data.DESIRED_Sites 	T2_US_MIT
+data.GlobalJobId 	crab3@vocms0107.cern.ch#59356655.0#1601911341
+data.HasSingularity 	true
+data.InputData 	Onsite
+data.JobCurrentStartDate 	Oct 5, 2020 @ 17:22:38.000
+data.RemoteHost 	slot1_8@glidein_412354_105995905@HIBAT0074.CMSAF.MIT.EDU
+data.RequestCpus 	1
+data.RequestMemory 	2,000
+data.ScheddName 	crab3@vocms0107.cern.ch
+data.Site 	T2_US_MIT
+data.Tier 	T2
+data.Type 	test
+
+
+CRAB_Workflow --> Group number e.g. sciaba_crab_HC-95-T2_US_MIT --> 95
+------------------------------------------------
+data.CRAB_PostJobStatus 	failed
+data.Status 	Completed
+
+data.ErrorClass 	Application
+data.ErrorType 	Executable
+data.ExitCode 	139
+data.ExitStatus 	0
+data.CRAB_HC 	true
+data.CRAB_JobArch 	slc6_amd64_gcc530
+data.CRAB_JobLogURL 	https://cmsweb.cern.ch/scheddmon/0121/cmsprd/201005_013813:sciaba_crab_HC-101-T1_DE_KIT-93088-20201005033703/job_out.163.0.txt
+data.CRAB_PostJobLogURL 	https://cmsweb.cern.ch/scheddmon/0121/cmsprd/201005_013813:sciaba_crab_HC-101-T1_DE_KIT-93088-20201005033703/postjob.163.0.txt
+data.CRAB_PrimaryDataset 	GenericTTbar
+data.CRAB_Retry 	0
+data.CRAB_SaveLogsFlag 	false
+data.CondorExitCode 	139
+data.EstimatedWallTimeMins 	300
+data.JobExitCode 	139
+data.JobFailed 	1
+data.VO 	cms
+data.Chirp_CRAB3_Job_ExitCode 	8,020
+data.Chirp_WMCore_cmsRun_Exception_Message 	b"An exception of category 'FileOpenError' occurred ..."
+
+https://monit-kibana.cern.ch/kibana/goto/d9fdfe6a44b115a45e7ad21c4c9c21f0
+
+------------------------------------------------
+data.CRAB_PostJobStatus 	finished
+data.Status 	Completed
+
+data.ErrorClass 	Success
+data.ErrorType 	Success
+data.ExitCode 	0
+data.ExitStatus 	0
+data.JobFailed 	0
+------------------------------------------------
+
+https://monit-kibana.cern.ch/kibana/goto/5fe46c5bfee70d9130675552cfd60212
+
+"""
+
+
+SAM 3
+
+
+
+"""
+data.details  OK: COMPLETED.<br>>>> ce05-htc.cr.cnaf.infn.it: ....
+data.dst_country Italy
+data.dst_experiment_site 	T1_IT_CNAF
+data.dst_federation IT-INFN-CNAF
+data.dst_hostname ce05-htc.cr.cnaf.infn.it
+data.dst_site INFN-T1
+data.dst_tier 1
+data.gathered_at tf-cms-prod.cern.ch
+data.metric_name org.sam.CONDOR-JobSubmit-/cms/Role=lcgadmin
+data.nagiosHost UNKNOWN
+data.service_flavour HTCONDOR-CE
+data.status OK
+data.status_code 1
+data.summary OK: COMPLETED.
+data.vo cms
+
+https://monit-kibana-acc.cern.ch/kibana/goto/3e3cd423ad01961a76c0d7980fdf477f
+
+"""
