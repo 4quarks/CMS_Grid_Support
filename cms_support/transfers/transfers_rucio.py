@@ -46,10 +46,13 @@ class Transfers(AbstractQueries, ABC):
             dict_attr = {direction + "_url": hostname,
                          direction + "_rse": site,
                          CteRucio.REF_LOG: filter_error_kibana}
-            dict_attr_not = {other_direction + "_url": blacklist_regex}
-            kibana_query_failed = self.get_kibana_query(dict_attr=dict_attr, dict_attr_not=dict_attr_not)
+            dict_attr_not = {other_direction + "_url": blacklist_regex,
+                             other_direction + "_rse": blacklist_regex,
+                             other_direction + "_endpoint": blacklist_regex}
+            kibana_query = self.get_kibana_query(dict_attr=dict_attr, dict_attr_not=dict_attr_not)
+            print('epa ', kibana_query)
             ############ QUERY TO ELASTICSEARCH ############
-            response_kibana = self.get_direct_response(kibana_query=kibana_query_failed, max_results=10000)
+            response_kibana = self.get_direct_response(kibana_query=kibana_query, max_results=10000)
             ############ GROUP DATA BY ERRORS ############
             grouped_by_error = {}
             ############ ITERATE OVER ALL ERRORS ############

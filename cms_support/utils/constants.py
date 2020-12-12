@@ -64,7 +64,8 @@ class Constants:
                        'unable to read replica', 'srm_file_busy', 'general problem: problem while connected',
                        'system error in connect: connection timed out', 'invalid request descriptor',
                        'failed to deliver poolmgrselectwritepoolmsg', 'a system call failed: broken pipe',
-                       'no free space on storage area', 'commands denied', 'All pools are full']
+                       'no free space on storage area', 'commands denied', 'All pools are full',
+                       'Changing file state because request state has changed']
 
     REF_PFN_SRC = "src_url"
     REF_PFN_DST = "dst_url"

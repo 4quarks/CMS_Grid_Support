@@ -202,6 +202,7 @@ class AbstractQueries(ABC):
         return response_clean
 
     def add_query_attr(self, key, value, not_str=""):
+        # TODO: add regex lower/upper case
         self.kibana_query += Constants.ADD_DATA.format(not_str, key, value.replace("|", ".*|.*"))
 
     def get_kibana_query(self, dict_attr=None, dict_attr_not=None):
