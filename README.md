@@ -18,7 +18,7 @@
   <h3 align="center">CMS Site Support</h3>
 
   <p align="center">
-    Tools to accelerate monitoring in the CMS computing grid
+    cms_support to accelerate monitoring in the CMS computing grid
     <br />
     <a href="https://github.com/4quarks/CMS_Grid_Support/documents"><strong>Explore the docs »</strong></a>
     <br />
@@ -87,7 +87,7 @@ CMS_Grid_Support
 ├── LICENSE
 ├── README.md
 ├── requirements.txt
-└── tools
+└── cms_support
     ├── app.py
     ├── __init__.py
     ├── __main__.py
@@ -152,26 +152,26 @@ This is an example of how to list things you need to use the software and how to
 ## Usage
 You can explore the functionalities:
 ```
-$ python -m tools -h
+$ python -m cms_support -h
 ```
 
 ### Transfers
 Running the `transfers` module you will write an Excel with all the transfers errors for a 
-certain period (--hours/--days/--minutes, default 24h) for one specific site/host. You can filter the search blacklisting 
+certain period (--hours/--days/--minutes, default 24h) for one specific site/host. You can filter the search by blacklisting 
 sites, endpoints, directories, etc from the url (--blacklist) or looking for an specific error (--error).
 You can also write a txt file with all the LFNs grouped by error (--write_lfns). 
 
 ```
-$ python -m tools transfers -h
+$ python -m cms_support transfers -h
 ```
 Here below you can see different examples:
 ```
-$ python -m tools transfers storm.ifca.es
-$ python -m tools transfers T1_UK_RAL 
-$ python -m tools transfers T1_UK_RAL --hours 16
-$ python -m tools transfers T1_UK_RAL --blacklist "se3.itep.ru|temp|Checksum"
-$ python -m tools transfers T1_UK_RAL --error No.such.file
-$ python -m tools transfers T1_UK_RAL --write_lfns 
+$ python -m cms_support transfers storm.ifca.es
+$ python -m cms_support transfers T1_UK_RAL 
+$ python -m cms_support transfers T1_UK_RAL --hours 16
+$ python -m cms_support transfers T1_UK_RAL --blacklist "se3.itep.ru|temp|Checksum|loadtest"
+$ python -m cms_support transfers T1_UK_RAL --error No.such.file
+$ python -m cms_support transfers T1_UK_RAL --write_lfns 
 ```
 <p align="center">
  <img src="images/eg_transfers.png" alt="Eg Transfers Excel" width="480" height="300">
@@ -192,15 +192,15 @@ the target computing resource or site for a certain period (--hours/--days/--min
 You can specify the flavour (--flavour) as well as the blacklisted sites and hosts (--blacklist). 
 
 ```
-$ python -m tools status -h
+$ python -m cms_support status -h
 ```
 Here below you can see different examples:
 ```
-$ python -m tools status T1_UK_RAL
-$ python -m tools status "T1|T2"
-$ python -m tools status T1_UK_RAL --flavour CE
-$ python -m tools status T1_UK_RAL --hours 8
-$ python -m tools status T1_UK_RAL --blacklist T2_PL_Warsaw
+$ python -m cms_support status T1_UK_RAL
+$ python -m cms_support status "T1|T2"
+$ python -m cms_support status T1_UK_RAL --flavour CE
+$ python -m cms_support status T1_UK_RAL --hours 8
+$ python -m cms_support status T1_UK_RAL --blacklist T2_PL_Warsaw
 ```
 
 ### Site Readiness
@@ -209,14 +209,14 @@ the target sites. Therefore, if the sites are fully enabled you won't get any re
 You can specify the metric of interest (--metric) as well as the blacklisted sites and hosts (--blacklist). 
 
 ```
-$ python -m tools readiness -h
+$ python -m cms_support readiness -h
 ```
 Here below you can see different examples:
 ```
-$ python -m tools readiness T1_UK_RAL
-$ python -m tools readiness "T1|T2"
-$ python -m tools readiness T1_UK_RAL --metric "prod|crab|life"
-$ python -m tools readiness T1_UK_RAL --blacklist "Warsaw|ITEP"
+$ python -m cms_support readiness T1_UK_RAL
+$ python -m cms_support readiness "T1|T2"
+$ python -m cms_support readiness T1_UK_RAL --metric "prod|crab|life"
+$ python -m cms_support readiness T1_UK_RAL --blacklist "Warsaw|ITEP"
 ```
 
 <!-- ROADMAP -->
@@ -241,7 +241,7 @@ echo "mongodb-org hold" | sudo dpkg --set-selections
 echo "mongodb-org-server hold" | sudo dpkg --set-selections
 echo "mongodb-org-shell hold" | sudo dpkg --set-selections
 echo "mongodb-org-mongos hold" | sudo dpkg --set-selections
-echo "mongodb-org-tools hold" | sudo dpkg --set-selections
+echo "mongodb-org-cms_support hold" | sudo dpkg --set-selections
 sudo systemctl start mongod
 sudo systemctl status mongod
 mongo
