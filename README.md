@@ -121,7 +121,7 @@ To get a local copy up and running follow these simple example steps.
 This is an example of how to list things you need to use the software and how to install them.
 * Python 3
   ```sh
-  python ––version
+  python --version
   sudo apt install python3
   ```
 * Grafana key to query ElasticSearch. e.g. "Bearer FNJZ0gyS..." 

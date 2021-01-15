@@ -39,8 +39,8 @@ class Constants:
     SEPARATION_ROWS = 4
 
     # TRANSFERS
-    KEYWORDS_ERRORS = ['srm_authorization_failure', 'overwrite is not enabled', 'internal server error',
-                       'no such file or directory', 'timeout of 360 seconds has been exceeded',
+    KEYWORDS_ERRORS = ['overwrite is not enabled', 'internal server error',
+                       'no such file', 'timeout of 360 seconds has been exceeded',
                        'connection refused globus_xio', 'checksum mismatch',
                        'source and destination file size mismatch', 'protocol family not supported',
                        'permission_denied', 'srm_putdone error on the surl', 'no route to host',
@@ -55,8 +55,8 @@ class Constants:
                        'reports could not open connection to', 'closing xrootd file handle',
                        'failed to read checksum file', 'SRM_NO_FREE_SPACE',
                        'invalid request type for token', 'IPC failed while attempting to perform request',
-                       'copy failed with mode 3rd push',
-                       'unable to build the turl for the provided transfer protocol',
+                       'copy failed with mode 3rd push', 'error accessing HOST', 'unknown error',
+                       'unable to build the turl for the provided transfer protocol', 'Service Unavailable',
                        'connection reset by peer', 'site busy: too many queued requests',
                        'no fts server has updated the transfer status the last 900 seconds', "file is unavailable",
                        'file recreation canceled since the file cannot be routed to tape',
@@ -65,7 +65,13 @@ class Constants:
                        'system error in connect: connection timed out', 'invalid request descriptor',
                        'failed to deliver poolmgrselectwritepoolmsg', 'a system call failed: broken pipe',
                        'no free space on storage area', 'commands denied', 'All pools are full',
-                       'Changing file state because request state has changed']
+                       'Changing file state because request state has changed', 'Protocol(s) not supported',
+                       'The operation was aborted', 'Operation canceled', 'Connection limit exceeded', 'File not found',
+                       'Not released because it is not pinned', 'Invalid argument',
+                       'System error in mkdir', 'Internal HDFS error', 'Error recalling file from tape',
+                       'StoRM encountered an unexpected error', 'Permission denied', 'Error reading token data header',
+                       'Unexpected server error', 'SRM_INVALID_PATH', 'SRM_AUTHORIZATION_FAILURE',
+                       'Network is unreachable', 'Connection timed out']
 
     REF_PFN_SRC = "src_url"
     REF_PFN_DST = "dst_url"
@@ -110,7 +116,8 @@ class CteSAM(Constants):
                   'XRootDStatus.code=206 "[ERROR] Operation expired"', 'Unspecified gridmanager error',
                   'Local Stage Out Failed', 'Error sending files to schedd', 'Error connecting to schedd',
                   'LogicalFileNameNotFound', 'PERMISSION_DENIED', '[3011] No servers are available to read the file',
-                  'Attempts to submit failed', 'Socket timed out on send/recv operation']
+                  'Attempts to submit failed', 'Socket timed out on send/recv operation', 'BLAH_JOB_SUBMIT timed out',
+                  'Redirect limit has been reached']
     KEYWORD_XRD = ['Ncat: Connection refused', 'Ncat: Connection timed out', 'invalid argument', 'Auth failed',
                    'Network is unreachable', 'Permission denied' 'Name or service not known']
     KEYWORDS_ERRORS = KEYWORD_SRM + KEYWORD_CE + KEYWORD_XRD
