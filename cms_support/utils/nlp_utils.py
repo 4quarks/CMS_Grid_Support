@@ -1,4 +1,5 @@
 # coding=utf-8
+
 class AbstractNLP:
     def __init__(self, raw_text):
         self.raw_text = raw_text
@@ -11,7 +12,7 @@ class AbstractNLP:
 class TextNLP(AbstractNLP):
     def __init__(self, raw_text, ref_keywords_clean):
         super().__init__(raw_text)
-        self.ref_keywords_clean = ref_keywords_clean
+        self.ref_keywords_clean = [self.preprocess_string_nlp(keyword) for keyword in ref_keywords_clean]
 
     def get_keyword(self, clean_text):
         keywords_value = None

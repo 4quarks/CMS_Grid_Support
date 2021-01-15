@@ -3,8 +3,8 @@ import pymongo
 import os
 from pymongo.collation import Collation
 import json
-from utils.query_utils import Time
-from sites.vofeed import VOFeed
+from cms_support.utils.query_utils import Time
+from cms_support.sites.vofeed import VOFeed
 
 
 class MongoDB:
@@ -93,4 +93,4 @@ if __name__ == "__main__":
     # algo = mongo.find_document(mongo.vofeed, query_ex)
     site_info = SiteInfo()
     # site_info.update_mongo_vofeed()
-    print(site_info.get_list("flavour"))
+    print(site_info.write_json_all_resources())

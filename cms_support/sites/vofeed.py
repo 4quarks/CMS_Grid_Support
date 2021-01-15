@@ -1,62 +1,18 @@
 # coding=utf-8
 
 from abc import ABC
-from tools.utils.query_utils import AbstractQueries
-from tools.utils.constants import Constants as Cte
+from cms_support.utils.query_utils import AbstractQueries
+from cms_support.utils.constants import Constants as Cte
 import json
 import requests
 import re
-from tools.utils.site_utils import get_type_resource
+from cms_support.utils.site_utils import get_type_resource
 
-"""
-data.site 	T1_ES_PIC
-metadata.path 	vofeed15min
-
-data.services 	{
-                  "hostname": "xrootd01-cmst1.pic.es",
-                  "flavour": "XROOTD",
-                  "endpoint": "xrootd01-cmst1.pic.es:1095"
-                },
-                {
-                  "hostname": "xrootd02-cmst1.pic.es",
-                  "flavour": "XROOTD",
-                  "endpoint": "xrootd02-cmst1.pic.es:1095"
-                },
-                {
-                  "hostname": "llrppce.in2p3.fr",
-                  "flavour": "HTCONDOR-CE",
-                  "endpoint": "llrppce.in2p3.fr:9619",
-                  "production": false
-                }
-data.tier 	1
-data.vo 	CMS
-metadata.producer 	cmssst
-
----------------------------------------------------------------------------------
-data.name 	T2_IT_Bari
-metadata.path 	scap15min
-
-data.core_cpu_intensive 	1,250
-data.core_io_intensive 	25
-data.core_max_used 	2,000
-data.core_production 	547
-data.core_usable 	1,000
-data.disk_experiment_use 	1
-data.disk_pledge 	500
-data.disk_usable 	500
-data.hs06_per_core 	10
-data.hs06_pledge 	10,000
-data.tape_pledge 	0
-data.tape_usable 	0
-data.when 	2020-Jan-17 22:12:00
-data.who 	lammel
-data.wlcg_federation_fraction 	1
-data.wlcg_federation_name 	Austrian Tier-2 Federation
-
-"""
+# with open('sites_resources.json') as json_file:
+#     ALL_RESOURCES = json.load(json_file)
 
 TEST_FIELD = "metadata.path:"
-ALL_RESOURCES = json.loads(requests.get("https://pcutrina.web.cern.ch/pcutrina/sites_resources.json").content)
+ALL_RESOURCES = json.loads(requests.get("http://pcutrina.web.cern.ch/pcutrina/sites_resources.json").content)
 
 
 def get_resources_from_json(site="", hostname="", flavour=""):

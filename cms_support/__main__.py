@@ -1,9 +1,12 @@
+# coding=utf-8
+
 import argparse
-from tools.app import run_transfers, run_site_status, run_site_readiness
+from cms_support.app import run_transfers, run_site_status, run_site_readiness
+from cms_support.utils.constants import Constants
 
 
 def main():
-    parser = argparse.ArgumentParser(prog='python -m tools', description="CMS Support Tools!")
+    parser = argparse.ArgumentParser(prog='python -m '+Constants.PACKAGE_NAME, description="CMS Support Tools!")
     subparsers = parser.add_subparsers(dest='cmd', help='sub-command help', title="cmd")
     subparsers.required = True
 

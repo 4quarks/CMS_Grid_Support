@@ -6,7 +6,8 @@ import json
 from copy import deepcopy
 import datetime
 from abc import ABC
-from tools.utils.constants import Constants, logging
+from cms_support.utils.constants import Constants, logging
+import re
 
 
 FIRST_QUERY = {
@@ -120,22 +121,33 @@ class Time:
         return [min_time, max_time]
 
     def timestamp_to_human(self, timestamp):
-        return datetime.datetime.utcfromtimestamp(int(timestamp / 1000)).strftime('%d-%m-%Y %H:%M')
+        return datetime.datetime.fromtimestamp(int(timestamp / 1000)).strftime('%d-%m-%Y %H:%M')
 
     def timestamp_to_iso(self, timestamp):
-        return datetime.datetime.utcfromtimestamp(int(timestamp / 1000)).isoformat()
+        return datetime.datetime.fromtimestamp(int(timestamp / 1000)).isoformat()
 
 
 class AbstractQueries(ABC):
-    def __init__(self, time_class):
+    def __init__(self, time_class, target="", blacklist_regex=""):
         self.index_name = ""
         self.index_id = ""
+        self.basic_kibana_query = ""
+        self.kibana_query = ""
         self.time_class = time_class
+        self.blacklist_regex = blacklist_regex
+        self.target = target
 
-    def get_direct_response(self, kibana_query, max_results=500):
-        return self.get_response(self.get_query(kibana_query, max_results))
+    @staticmethod
+    def is_blacklisted(target, blacklist_regex):
+        is_blacklisted = False
+        if blacklist_regex and re.search(blacklist_regex.lower(), target.lower()):
+            is_blacklisted = True
+        return is_blacklisted
 
-    def get_query(self, kibana_query="", max_results=500):
+    def get_direct_response(self, kibana_query, max_results=500, acc_index=False):
+        return self.get_response(self.get_query(kibana_query, max_results, acc_index))
+
+    def get_query(self, kibana_query="", max_results=500, acc_index=False):
         """
 
         :param kibana_query:
@@ -154,7 +166,12 @@ class AbstractQueries(ABC):
                                                    raw_query, max_results)
 
             logging.info("Kibana query: " + kibana_query)
-            kibana_link = Constants.KIBANA.format(self.time_class.time_slot_iso[0], self.time_class.time_slot_iso[1],
+            if acc_index:
+                source = Constants.SOURCE_KIBANA_ACC
+            else:
+                source = Constants.SOURCE_KIBANA
+            kibana_link = Constants.KIBANA.format(source,
+                                                  self.time_class.time_slot_iso[0], self.time_class.time_slot_iso[1],
                                                   self.index_name, kibana_query)
 
             logging.info("Kibana link: " + kibana_link)
@@ -183,6 +200,19 @@ class AbstractQueries(ABC):
         if json_response:
             response_clean = [element["_source"] for element in json_response['responses'][0]['hits']['hits']]
         return response_clean
+
+    def add_query_attr(self, key, value, not_str=""):
+        # TODO: add regex lower/upper case
+        self.kibana_query += Constants.ADD_DATA.format(not_str, key, value.replace("|", ".*|.*"))
+
+    def get_kibana_query(self, dict_attr=None, dict_attr_not=None):
+        self.kibana_query = self.basic_kibana_query
+        if dict_attr:
+            [self.add_query_attr(key, value) for key, value in dict_attr.items() if key and value]
+        if dict_attr_not:
+            [self.add_query_attr(key, value, "NOT") for key, value in dict_attr_not.items() if key and value]
+        return self.kibana_query
+
 
 
 class AbstractNLP:

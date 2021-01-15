@@ -121,7 +121,7 @@ To get a local copy up and running follow these simple example steps.
 This is an example of how to list things you need to use the software and how to install them.
 * Python 3
   ```sh
-  python ––version
+  python --version
   sudo apt install python3
   ```
 * Grafana key to query ElasticSearch. e.g. "Bearer FNJZ0gyS..." 
@@ -169,7 +169,7 @@ Here below you can see different examples:
 $ python -m tools transfers storm.ifca.es
 $ python -m tools transfers T1_UK_RAL 
 $ python -m tools transfers T1_UK_RAL --hours 16
-$ python -m tools transfers T1_UK_RAL --blacklist "se3.itep.ru/temp/Checksum"
+$ python -m tools transfers T1_UK_RAL --blacklist "se3.itep.ru|temp|Checksum"
 $ python -m tools transfers T1_UK_RAL --error No.such.file
 $ python -m tools transfers T1_UK_RAL --write_lfns 
 ```
@@ -180,7 +180,7 @@ $ python -m tools transfers T1_UK_RAL --write_lfns
 1. Source information
 2. Destination information
 3. File details
-4. Number of failures grouped by error type
+4. Number of failures grouped by error
 5. Failures grouped by sites
 6. Direction of the transfers from the specified target point of view. 
 
