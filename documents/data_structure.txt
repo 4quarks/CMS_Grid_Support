@@ -168,9 +168,10 @@ data.reason 	DESTINATION [17] Destination file exists and overwrite is not enabl
 -------------------- OK -------------------------------
 data.event_type     transfer-done
 
-data.activity Functional Test
-data.event_type transfer-done
+data.activity:Functional Test
+data.event_type:transfer-done
 
+data.activity:"Functional Test" AND data.event_type:transfer-done
 https://monit-kibana.cern.ch/kibana/goto/4d07f14fec64999b3116ea4cac849e0f
 
 """

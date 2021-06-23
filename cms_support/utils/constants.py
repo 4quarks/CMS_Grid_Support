@@ -71,7 +71,8 @@ class Constants:
                        'System error in mkdir', 'Internal HDFS error', 'Error recalling file from tape',
                        'StoRM encountered an unexpected error', 'Permission denied', 'Error reading token data header',
                        'Unexpected server error', 'SRM_INVALID_PATH', 'SRM_AUTHORIZATION_FAILURE',
-                       'Network is unreachable', 'Connection timed out', "transfer forcefully killed"]
+                       'Network is unreachable', 'Connection timed out', "transfer forcefully killed",
+                       "Unable to get free physical space", "Certificates do not conform to algorithm constraints"]
 
     REF_PFN_SRC = "src_url"
     REF_PFN_DST = "dst_url"
